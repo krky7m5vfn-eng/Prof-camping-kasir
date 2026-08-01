@@ -202,12 +202,35 @@
   .prod-rank{display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; background:var(--amber); color:var(--pine); font-family:'IBM Plex Mono'; font-size:10.5px; font-weight:700; margin-right:8px; flex:none;}
 
   @media (prefers-reduced-motion: reduce){ .drawer, .tag, .cart-fab{transition:none;} }
+
+  /* ---- Login gate ---- */
+  #loginScreen{position:fixed; inset:0; z-index:200; background:var(--pine); display:flex; align-items:center; justify-content:center; padding:24px; padding-top:calc(24px + env(safe-area-inset-top));}
+  #loginScreen[hidden]{display:none;}
+  .login-card{width:100%; max-width:360px; background:var(--pine-light); border:1px solid var(--line); border-radius:16px; padding:28px 24px;}
+  .login-card h1{font-size:28px; margin:0 0 4px; color:var(--canvas);}
+  .login-card .login-sub{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--amber-bright); letter-spacing:0.08em; margin-bottom:22px;}
+  .login-card .field{margin-bottom:12px;}
+  .login-card .login-btn{width:100%; padding:14px; border:none; border-radius:12px; background:var(--amber); color:var(--pine); font-family:'Big Shoulders Display'; font-weight:800; font-size:16px; letter-spacing:0.03em; text-transform:uppercase; cursor:pointer; margin-top:6px;}
+  .login-card .login-btn:disabled{opacity:0.5;}
+  .login-card .login-error{color:#e0897d; font-size:12.5px; font-family:'IBM Plex Mono'; margin-top:10px; min-height:16px;}
+  .logout-btn{background:none; border:1px solid var(--line); color:var(--canvas-dim); font-family:'IBM Plex Mono'; font-size:10.5px; padding:5px 10px; border-radius:999px; cursor:pointer; margin-top:4px;}
 </style>
 <!-- Firebase (dipakai untuk sinkronisasi data online antar-HP; lihat konfigurasi di bagian awal skrip aplikasi di bawah) -->
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-auth-compat.js"></script>
 </head>
 <body>
+<div id="loginScreen" hidden>
+  <div class="login-card">
+    <h1>🏕️ Prof Camping</h1>
+    <div class="login-sub">LOGIN ADMIN</div>
+    <input class="field" type="email" id="loginEmail" placeholder="Email admin" autocomplete="username">
+    <input class="field" type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+    <button class="login-btn" id="loginBtn">Masuk</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
 <div class="topo"></div>
 
 <header>
@@ -216,7 +239,10 @@
       <h1>Prof Camping</h1>
       <div class="tagline">ADMIN · SEWA ALAT CAMPING</div>
     </div>
-    <div class="stat" id="itemCountStat"></div>
+    <div>
+      <div class="stat" id="itemCountStat"></div>
+      <div style="text-align:right"><button class="logout-btn" id="logoutBtn" hidden>Keluar</button></div>
+    </div>
   </div>
   <div class="tabs">
     <button class="tab active" data-tab="katalog">KATALOG</button>
@@ -306,6 +332,49 @@ const FIRESTORE_SYNCED_KEYS = [
   "basecamp_custom_products",
   "basecamp_product_overrides"
 ];
+
+// ================= LOGIN ADMIN (FIREBASE AUTHENTICATION) =================
+let auth = null;
+if(firebaseEnabled){
+  try{ auth = firebase.auth(); }catch(err){ console.error("Gagal menyiapkan login.", err); auth = null; }
+}
+
+const loginScreen = document.getElementById("loginScreen");
+const loginEmail = document.getElementById("loginEmail");
+const loginPassword = document.getElementById("loginPassword");
+const loginBtn = document.getElementById("loginBtn");
+const loginError = document.getElementById("loginError");
+const logoutBtn = document.getElementById("logoutBtn");
+
+if(firebaseEnabled && auth){
+  loginScreen.hidden = false; // tutup akses dulu sampai status login diketahui
+  auth.onAuthStateChanged(user=>{
+    if(user){
+      loginScreen.hidden = true;
+      logoutBtn.hidden = false;
+    } else {
+      loginScreen.hidden = false;
+      logoutBtn.hidden = true;
+    }
+  });
+
+  function doLogin(){
+    const email = loginEmail.value.trim();
+    const password = loginPassword.value;
+    if(!email || !password){ loginError.textContent = "Isi email dan password dulu."; return; }
+    loginBtn.disabled = true; loginBtn.textContent = "Memproses…"; loginError.textContent = "";
+    auth.signInWithEmailAndPassword(email, password)
+      .catch(()=>{ loginError.textContent = "Email atau password salah."; })
+      .finally(()=>{ loginBtn.disabled = false; loginBtn.textContent = "Masuk"; });
+  }
+  loginBtn.addEventListener("click", doLogin);
+  loginPassword.addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+  logoutBtn.addEventListener("click", ()=>{ auth.signOut(); });
+} else {
+  // Firebase/login belum di-setup: aplikasi tetap jalan seperti biasa tanpa perlu login
+  loginScreen.hidden = true;
+  logoutBtn.hidden = true;
+}
 
 const WA_NUMBER_ADMIN = "6282292191789"; // nomor WA admin (cadangan/tidak wajib dipakai)
 
