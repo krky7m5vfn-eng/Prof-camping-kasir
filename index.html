@@ -53,6 +53,8 @@
   .searchbar input{width:100%; padding:12px 16px; border-radius:999px; border:1px solid var(--line); background:var(--pine-light); color:var(--canvas); font-family:'Work Sans'; font-size:15px; outline:none;}
   .searchbar input::placeholder{color:var(--canvas-dim); opacity:0.6;}
   .searchbar input:focus{border-color:var(--amber-bright); box-shadow:0 0 0 3px rgba(210,169,79,0.15);}
+  .add-product-btn{padding:9px 16px; border-radius:999px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-family:'IBM Plex Mono'; font-size:12px; font-weight:600; letter-spacing:0.03em; cursor:pointer; white-space:nowrap;}
+  .add-product-btn:active{background:var(--amber); color:var(--pine);}
 
   .chips{display:flex; gap:8px; overflow-x:auto; margin-top:12px; padding-bottom:14px; scrollbar-width:none;}
   .chips::-webkit-scrollbar{display:none;}
@@ -75,6 +77,11 @@
   .add-btn{border:1px solid var(--amber); background:transparent; color:var(--amber-bright); width:34px; height:34px; border-radius:8px; font-size:19px; cursor:pointer; line-height:1; display:flex; align-items:center; justify-content:center; transition:all .12s ease;}
   .add-btn:hover, .add-btn:focus-visible{background:var(--amber); color:var(--pine); outline:none;}
   .in-cart{border-color:var(--amber-bright); box-shadow:inset 0 0 0 1px var(--amber-bright);}
+  .tag-card-actions{position:absolute; top:8px; right:8px; display:flex; gap:6px;}
+  .tag-card-actions button{width:20px; height:20px; border-radius:50%; background:var(--pine-light); font-size:10.5px; line-height:1; display:flex; align-items:center; justify-content:center; cursor:pointer;}
+  .edit-product-btn{border:1px solid var(--amber); color:var(--amber-bright);}
+  .del-product-btn{border:1px solid var(--brick); color:var(--brick);}
+  .custom-badge{font-size:9px; font-family:'IBM Plex Mono'; color:var(--amber-bright); border:1px solid var(--amber); border-radius:999px; padding:1px 6px; margin-left:6px; vertical-align:middle;}
 
   .empty{text-align:center; color:var(--canvas-dim); padding:60px 20px; font-family:'IBM Plex Mono',monospace; font-size:13px;}
 
@@ -196,6 +203,9 @@
 
   @media (prefers-reduced-motion: reduce){ .drawer, .tag, .cart-fab{transition:none;} }
 </style>
+<!-- Firebase (dipakai untuk sinkronisasi data online antar-HP; lihat konfigurasi di bagian awal skrip aplikasi di bawah) -->
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div class="topo"></div>
@@ -216,6 +226,9 @@
   </div>
   <div id="katalogFilters">
     <div class="searchbar"><input id="searchInput" type="text" inputmode="search" placeholder="Cari alat… misal: tenda, kompor, lampu"></div>
+    <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+      <button id="addProductBtn" class="add-product-btn">+ Tambah Produk</button>
+    </div>
     <div class="chips" id="chips"></div>
   </div>
 </header>
@@ -238,7 +251,62 @@
   </div>
 </div>
 
+<div class="overlay" id="productOverlay"></div>
+<div class="drawer" id="productDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-head"><h2 id="productDrawerTitle">Tambah Produk</h2><button id="closeProductDrawer">TUTUP ✕</button></div>
+  <div class="drawer-body">
+    <div class="section-label">Nama Produk</div>
+    <input class="field" id="newProdName" placeholder="Contoh: Tenda 6 Orang Eiger">
+    <div class="section-label">Kategori</div>
+    <div class="dur-chips" id="prodCatChips"></div>
+    <input class="field" id="newProdCat" placeholder="Atau ketik kategori baru">
+    <div class="section-label">Harga Sewa per Hari (Rp)</div>
+    <input class="field" type="number" min="0" id="newProdPrice" placeholder="Contoh: 25000">
+    <div id="newProdError" style="color:#e0897d; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
+  </div>
+  <div class="drawer-foot">
+    <button class="save-btn" id="saveProductBtn">Simpan Produk</button>
+  </div>
+</div>
+
 <script>
+// ================= KONFIGURASI FIREBASE (SINKRON DATA ONLINE) =================
+// Langkah 1 sudah selesai disiapkan di sini. Nanti di Langkah 2-3, ganti nilai di bawah ini
+// dengan konfigurasi dari project Firebase kamu sendiri (Firebase Console → Project Settings → Your apps → SDK setup and configuration).
+// Selama masih "GANTI_...", aplikasi otomatis jalan seperti biasa pakai penyimpanan lokal di HP ini saja (tidak error, tidak rusak).
+const firebaseConfig = {
+  apiKey: "AIzaSyD_HTaCk6Bv_GVpzE0Nh_033rZ6SMHbz3Q",
+  authDomain: "profcamping-3396a.firebaseapp.com",
+  projectId: "profcamping-3396a",
+  storageBucket: "profcamping-3396a.firebasestorage.app",
+  messagingSenderId: "1018588273596",
+  appId: "1:1018588273596:web:5dc20386584bad104869b9"
+};
+
+let firebaseEnabled = false;
+let db = null;
+try{
+  if(firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("GANTI_")){
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    db.settings({ ignoreUndefinedProperties: true }); // jaga-jaga kalau ada field opsional yang kosong
+    firebaseEnabled = true;
+  }
+}catch(err){
+  console.error("Gagal menghubungkan ke Firebase, aplikasi tetap jalan pakai penyimpanan lokal.", err);
+  firebaseEnabled = false;
+}
+
+// Kunci data yang disinkronkan online (selain ini, misalnya keranjang belanja yang sedang berjalan, tetap disimpan lokal per-HP saja)
+const FIRESTORE_SYNCED_KEYS = [
+  "basecamp_customers",
+  "basecamp_transactions",
+  "basecamp_bookings",
+  "basecamp_custom_products",
+  "basecamp_product_overrides"
+];
+
 const WA_NUMBER_ADMIN = "6282292191789"; // nomor WA admin (cadangan/tidak wajib dipakai)
 
 const CATALOG = [
@@ -299,7 +367,6 @@ const CATALOG = [
 ["Kacamata Gorpcore","Peralatan Lainnya",5000],
 ].map((r,i)=>({id:"p"+i, name:r[0], cat:r[1], price:r[2], unit:"Hari"}));
 
-const CATEGORIES = [...new Set(CATALOG.map(p=>p.cat))];
 const fmt = n => "Rp " + n.toLocaleString("id-ID");
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 const fmtDate = iso => { const d=new Date(iso+"T00:00:00"); return d.toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}); };
@@ -308,12 +375,26 @@ const addDays = (iso,n) => { const d=new Date(iso+"T00:00:00"); d.setDate(d.getD
 
 // ---------- persisted state ----------
 function load(key, fallback){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
-function save(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+function save(key, val){
+  try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
+  if(firebaseEnabled && FIRESTORE_SYNCED_KEYS.includes(key)){
+    db.collection("prof_camping_data").doc(key).set({ value: val, updatedAt: Date.now() })
+      .catch(err=>console.error("Gagal sinkron ke Firebase untuk", key, err));
+  }
+}
 
 let customers = load("basecamp_customers", []);      // [{id,name,phone}]
 let transactions = load("basecamp_transactions", []); // [{id,customer,items,durationDays,startDate,endDate,payment:{status,paidAmount},status,createdAt}]
 let bookings = load("basecamp_bookings", []);         // [{id,customer,items,durationDays,startDate,endDate,dp,total,status:'booking'|'diaktifkan'|'batal',linkedTxnId,createdAt}]
+let customProducts = load("basecamp_custom_products", []); // manually-added products: [{id,name,cat,price,unit}]
+let productOverrides = load("basecamp_product_overrides", {}); // built-in product edits: id -> {name,cat,price}
 let cart = load("basecamp_cart_v2", {});               // id -> qty
+
+// apply any saved edits to the built-in catalog items (built-in items are const but their fields aren't frozen)
+CATALOG.forEach(p=>{ if(productOverrides[p.id]) Object.assign(p, productOverrides[p.id]); });
+
+function allProducts(){ return [...CATALOG, ...customProducts]; }
+function getCategories(){ return [...new Set(allProducts().map(p=>p.cat))].sort((a,b)=>a.localeCompare(b, "id", { sensitivity:"base" })); }
 
 // ---------- checkout draft state ----------
 function freshDraft(){
@@ -361,7 +442,7 @@ document.querySelectorAll(".tab").forEach(btn=>{
     document.getElementById("transaksiView").style.display = activeTab==="transaksi" ? "" : "none";
     document.getElementById("laporanView").style.display = activeTab==="laporan" ? "" : "none";
     document.getElementById("itemCountStat").textContent =
-      activeTab==="katalog" ? (CATALOG.length+" ITEM") :
+      activeTab==="katalog" ? (allProducts().length+" ITEM") :
       activeTab==="booking" ? (bookings.filter(b=>b.status==="booking").length+" MENUNGGU") :
       activeTab==="laporan" ? "" :
       (transactions.length+" TRANSAKSI");
@@ -374,7 +455,7 @@ document.querySelectorAll(".tab").forEach(btn=>{
 // ================= KATALOG =================
 const chipsEl = document.getElementById("chips");
 function renderChips(){
-  const all = ["Semua", ...CATEGORIES];
+  const all = ["Semua", ...getCategories()];
   chipsEl.innerHTML = all.map(c => `<button class="chip ${c===activeCat?'active':''}" data-cat="${c}">${c.toUpperCase()}</button>`).join("");
   chipsEl.querySelectorAll(".chip").forEach(btn=>{
     btn.addEventListener("click", ()=>{ activeCat = btn.dataset.cat; renderChips(); renderCatalog(); });
@@ -383,16 +464,16 @@ function renderChips(){
 
 const catalogEl = document.getElementById("katalogView");
 function renderCatalog(){
-  let items = CATALOG.filter(p=>{
+  let items = allProducts().filter(p=>{
     const matchCat = activeCat==="Semua" || p.cat===activeCat;
     const matchQuery = p.name.toLowerCase().includes(query.toLowerCase());
     return matchCat && matchQuery;
-  });
+  }).sort((a,b)=>a.name.localeCompare(b.name, "id", { sensitivity:"base" }));
   document.getElementById("itemCountStat").textContent = items.length + " ITEM";
   if(items.length===0){ catalogEl.innerHTML = `<div class="empty">Tidak ada alat yang cocok.<br>Coba kata kunci lain.</div>`; return; }
   let html = "";
   if(activeCat==="Semua"){
-    CATEGORIES.forEach(cat=>{
+    getCategories().forEach(cat=>{
       const group = items.filter(p=>p.cat===cat);
       if(group.length===0) return;
       html += `<div class="group-title">${cat.toUpperCase()} · ${group.length}</div><div class="grid">${group.map(cardHtml).join("")}</div>`;
@@ -407,11 +488,110 @@ function renderCatalog(){
       renderCatalog(); renderCartFab();
     });
   });
+  catalogEl.querySelectorAll(".edit-product-btn").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const p = allProducts().find(x=>x.id===btn.dataset.editid);
+      if(p) openProductDrawer(p);
+    });
+  });
+  catalogEl.querySelectorAll(".del-product-btn").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const id = btn.dataset.delid;
+      const p = customProducts.find(x=>x.id===id);
+      if(!p) return;
+      if(!confirm(`Hapus produk manual "${p.name}"?`)) return;
+      customProducts = customProducts.filter(x=>x.id!==id);
+      save("basecamp_custom_products", customProducts);
+      delete cart[id]; save("basecamp_cart_v2", cart);
+      renderChips(); renderCatalog(); renderCartFab();
+    });
+  });
 }
+
+// ================= TAMBAH / EDIT PRODUK =================
+const productOverlay = document.getElementById("productOverlay");
+const productDrawer = document.getElementById("productDrawer");
+const productDrawerTitle = document.getElementById("productDrawerTitle");
+const saveProductBtn = document.getElementById("saveProductBtn");
+const newProdName = document.getElementById("newProdName");
+const newProdCat = document.getElementById("newProdCat");
+const newProdPrice = document.getElementById("newProdPrice");
+const newProdError = document.getElementById("newProdError");
+let editingProductId = null; // null = adding a new product; otherwise the id of the product being edited
+
+function renderProdCatChips(){
+  const cats = getCategories();
+  const chipsEl = document.getElementById("prodCatChips");
+  chipsEl.innerHTML = cats.map(c=>`<button type="button" class="dur-chip ${newProdCat.value.trim()===c?'active':''}" data-pcat="${c}">${c}</button>`).join("");
+  chipsEl.querySelectorAll("[data-pcat]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      newProdCat.value = btn.dataset.pcat;
+      renderProdCatChips();
+    });
+  });
+}
+newProdCat.addEventListener("input", renderProdCatChips);
+
+function openProductDrawer(product){
+  editingProductId = product ? product.id : null;
+  productDrawerTitle.textContent = product ? "Edit Produk" : "Tambah Produk";
+  saveProductBtn.textContent = product ? "Simpan Perubahan" : "Simpan Produk";
+  newProdName.value = product ? product.name : "";
+  newProdCat.value = product ? product.cat : "";
+  newProdPrice.value = product ? product.price : "";
+  newProdError.textContent = "";
+  renderProdCatChips();
+  productOverlay.classList.add("open"); productDrawer.classList.add("open");
+  setTimeout(()=>newProdName.focus(), 200);
+}
+function closeProductDrawer(){ productOverlay.classList.remove("open"); productDrawer.classList.remove("open"); editingProductId = null; }
+document.getElementById("addProductBtn").addEventListener("click", ()=>openProductDrawer(null));
+document.getElementById("closeProductDrawer").addEventListener("click", closeProductDrawer);
+productOverlay.addEventListener("click", closeProductDrawer);
+
+saveProductBtn.addEventListener("click", ()=>{
+  const name = newProdName.value.trim();
+  const cat = newProdCat.value.trim();
+  const price = parseInt(newProdPrice.value);
+  if(!name || !cat || !price || price<=0){
+    newProdError.textContent = "Nama, kategori, dan harga (lebih dari 0) wajib diisi.";
+    return;
+  }
+
+  if(editingProductId){
+    if(editingProductId.startsWith("c")){
+      // editing a manually-added product
+      const p = customProducts.find(x=>x.id===editingProductId);
+      if(p){ p.name = name; p.cat = cat; p.price = price; save("basecamp_custom_products", customProducts); }
+    } else {
+      // editing a built-in catalog product: mutate in place + persist an override so it survives reloads
+      const p = CATALOG.find(x=>x.id===editingProductId);
+      if(p){
+        p.name = name; p.cat = cat; p.price = price;
+        productOverrides[editingProductId] = { name, cat, price };
+        save("basecamp_product_overrides", productOverrides);
+      }
+    }
+  } else {
+    const product = { id: "c"+uid(), name, cat, price, unit: "Hari" };
+    customProducts.push(product);
+    save("basecamp_custom_products", customProducts);
+  }
+
+  closeProductDrawer();
+  renderChips(); renderCatalog();
+});
 function cardHtml(p){
   const inCart = !!cart[p.id];
+  const isCustom = p.id.startsWith("c");
   return `<div class="tag ${inCart?'in-cart':''}">
-    <div class="tag-name">${p.name}</div>
+    <div class="tag-card-actions">
+      <button class="edit-product-btn" data-editid="${p.id}" aria-label="Edit produk">✎</button>
+      ${isCustom ? `<button class="del-product-btn" data-delid="${p.id}" aria-label="Hapus produk">✕</button>` : ""}
+    </div>
+    <div class="tag-name">${p.name}${isCustom ? `<span class="custom-badge">MANUAL</span>` : ""}</div>
     <div class="tag-cat">${p.cat}</div>
     <div class="tag-bottom">
       <div class="tag-price">${fmt(p.price)} <small>/ ${p.unit.toLowerCase()}</small></div>
@@ -428,7 +608,7 @@ const totalAmount = document.getElementById("totalAmount");
 const saveBtn = document.getElementById("saveBtn");
 
 function cartEntries(){
-  return Object.entries(cart).map(([id,qty])=>({qty, product: CATALOG.find(p=>p.id===id)})).filter(e=>e.product);
+  return Object.entries(cart).map(([id,qty])=>({qty, product: allProducts().find(p=>p.id===id)})).filter(e=>e.product);
 }
 function cartSubtotal(){ return cartEntries().reduce((s,e)=>s+e.product.price*e.qty,0); }
 
@@ -465,7 +645,7 @@ function openEditTxn(id){
   editPrevDraft = JSON.parse(JSON.stringify(draft));
   cart = {};
   t.items.forEach(i=>{
-    const p = CATALOG.find(c=>c.name===i.name && c.price===i.price);
+    const p = allProducts().find(c=>c.name===i.name && c.price===i.price);
     if(p) cart[p.id] = i.qty;
   });
   save("basecamp_cart_v2", cart);
@@ -492,7 +672,7 @@ function openEditBooking(id){
   editPrevDraft = JSON.parse(JSON.stringify(draft));
   cart = {};
   b.items.forEach(i=>{
-    const p = CATALOG.find(c=>c.name===i.name && c.price===i.price);
+    const p = allProducts().find(c=>c.name===i.name && c.price===i.price);
     if(p) cart[p.id] = i.qty;
   });
   save("basecamp_cart_v2", cart);
@@ -520,7 +700,7 @@ function openActivateBooking(id){
   editPrevDraft = JSON.parse(JSON.stringify(draft));
   cart = {};
   b.items.forEach(i=>{
-    const p = CATALOG.find(c=>c.name===i.name && c.price===i.price);
+    const p = allProducts().find(c=>c.name===i.name && c.price===i.price);
     if(p) cart[p.id] = i.qty;
   });
   save("basecamp_cart_v2", cart);
@@ -1421,6 +1601,53 @@ document.getElementById("searchInput").addEventListener("input", (e)=>{ query = 
 renderChips();
 renderCatalog();
 renderCartFab();
+
+// ================= SINKRONISASI REALTIME (FIREBASE) =================
+function rerenderCurrentTab(){
+  if(activeTab==="katalog"){ renderChips(); renderCatalog(); }
+  else if(activeTab==="booking"){ renderBooking(); }
+  else if(activeTab==="transaksi"){ renderTransaksi(); }
+  else if(activeTab==="laporan"){ renderLaporan(); }
+  renderCartFab();
+}
+
+if(firebaseEnabled){
+  function attachFirestoreSync(key, applyValue){
+    db.collection("prof_camping_data").doc(key).onSnapshot(snap=>{
+      if(!snap.exists) return; // belum pernah ada data tersimpan online untuk key ini, biarkan data lokal yang jalan
+      const val = snap.data().value;
+      applyValue(val);
+      try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
+      rerenderCurrentTab();
+    }, err=>console.error("Gagal menerima update online untuk", key, err));
+  }
+
+  attachFirestoreSync("basecamp_customers", v=>{ customers = v; });
+  attachFirestoreSync("basecamp_transactions", v=>{ transactions = v; });
+  attachFirestoreSync("basecamp_bookings", v=>{ bookings = v; });
+  attachFirestoreSync("basecamp_custom_products", v=>{ customProducts = v; });
+  attachFirestoreSync("basecamp_product_overrides", v=>{
+    productOverrides = v;
+    CATALOG.forEach(p=>{ if(productOverrides[p.id]) Object.assign(p, productOverrides[p.id]); });
+  });
+
+  // dorong data lokal yang sudah ada (kalau ada) ke Firebase saat pertama kali tersambung,
+  // supaya data yang sudah dicatat sebelum online tidak hilang begitu saja
+  FIRESTORE_SYNCED_KEYS.forEach(key=>{
+    db.collection("prof_camping_data").doc(key).get().then(snap=>{
+      if(!snap.exists){
+        const localVal = load(key, key==="basecamp_product_overrides" ? {} : []);
+        if(localVal && (Array.isArray(localVal) ? localVal.length>0 : Object.keys(localVal).length>0)){
+          db.collection("prof_camping_data").doc(key).set({ value: localVal, updatedAt: Date.now() })
+            .catch(err=>console.error("Gagal mengunggah data awal untuk", key, err));
+        }
+      }
+    });
+  });
+
+  const tagline = document.querySelector(".tagline");
+  if(tagline) tagline.textContent = "ADMIN · SEWA ALAT CAMPING · ☁️ SINKRON ONLINE";
+}
 </script>
 </body>
 </html>
