@@ -91,6 +91,20 @@
 
   .overlay{position:fixed; inset:0; background:rgba(10,18,15,0.6); z-index:40; opacity:0; pointer-events:none; transition:opacity .2s ease; backdrop-filter:blur(2px);}
   .overlay.open{opacity:1; pointer-events:auto;}
+
+  .confirm-box{
+    position:fixed; left:50%; top:50%; z-index:60; width:min(340px, calc(100vw - 48px));
+    background:var(--pine-light); border:1px solid var(--line); border-radius:16px; padding:22px 20px;
+    transform:translate(-50%,-50%) scale(0.92); opacity:0; pointer-events:none; transition:all .18s ease;
+    box-shadow:0 10px 40px rgba(0,0,0,0.45);
+  }
+  .confirm-box.open{ opacity:1; transform:translate(-50%,-50%) scale(1); pointer-events:auto; }
+  #confirmOverlay{ z-index:59; }
+  .confirm-msg{ font-size:14.5px; line-height:1.5; margin-bottom:18px; }
+  .confirm-actions{ display:flex; gap:10px; }
+  .confirm-actions button{ flex:1; padding:11px; border-radius:10px; font-family:'IBM Plex Mono'; font-size:13px; cursor:pointer; }
+  .confirm-cancel{ background:transparent; border:1px solid var(--line); color:var(--canvas-dim); }
+  .confirm-ok{ background:var(--brick); border:1px solid var(--brick); color:var(--canvas); font-weight:600; }
   .drawer{position:fixed; left:0; right:0; bottom:0; z-index:41; background:var(--pine-light); border-top:1px solid var(--line); border-radius:20px 20px 0 0; max-height:90vh; display:flex; flex-direction:column; transform:translateY(100%); transition:transform .25s cubic-bezier(.22,1,.36,1); padding-bottom:env(safe-area-inset-bottom);}
   .drawer.open{transform:translateY(0);}
   .drawer-handle{width:40px; height:4px; background:var(--line); border-radius:99px; margin:10px auto 4px;}
@@ -165,6 +179,7 @@
   .badge-hutang{background:rgba(168,54,42,0.2); color:#e0897d;}
   .badge-sebagian{background:rgba(201,162,39,0.2); color:#e3c464;}
   .badge-lunas{background:rgba(63,167,90,0.18); color:#7fd899;}
+  .badge-method{background:rgba(210,169,79,0.16); color:var(--amber-bright);}
   .badge-booking{background:rgba(210,169,79,0.2); color:var(--amber-bright);}
   .badge-diaktifkan{background:rgba(63,167,90,0.18); color:#7fd899;}
   .badge-batal{background:rgba(168,54,42,0.2); color:#e0897d;}
@@ -248,6 +263,7 @@
     <button class="tab active" data-tab="katalog">KATALOG</button>
     <button class="tab" data-tab="booking">BOOKING</button>
     <button class="tab" data-tab="transaksi">TRANSAKSI</button>
+    <button class="tab" data-tab="pelanggan">PELANGGAN</button>
     <button class="tab" data-tab="laporan">LAPORAN</button>
   </div>
   <div id="katalogFilters">
@@ -262,6 +278,7 @@
 <main id="katalogView"></main>
 <main id="bookingView" style="display:none"></main>
 <main id="transaksiView" style="display:none"></main>
+<main id="pelangganView" style="display:none"></main>
 <main id="laporanView" style="display:none"></main>
 
 <button class="cart-fab" id="cartFab" hidden><span>Checkout</span><span class="count" id="cartCount">0</span></button>
@@ -296,7 +313,70 @@
   </div>
 </div>
 
+<div class="overlay" id="confirmOverlay"></div>
+<div class="confirm-box" id="confirmBox">
+  <div class="confirm-msg" id="confirmMsg"></div>
+  <div class="confirm-actions">
+    <button class="confirm-cancel" id="confirmCancelBtn">Batal</button>
+    <button class="confirm-ok" id="confirmOkBtn">Ya, Lanjutkan</button>
+  </div>
+</div>
+
+<div class="overlay" id="importOverlay"></div>
+<div class="drawer" id="importDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-head"><h2>Impor Banyak Pelanggan</h2><button id="closeImportDrawer">TUTUP ✕</button></div>
+  <div class="drawer-body">
+    <div class="date-summary">
+      Satu pelanggan per baris, format: <b>Nama, Nomor HP</b> (boleh pisah pakai koma, titik koma, atau tab — cocok kalau ditempel dari Excel/Notes).<br>
+      Contoh:<br>Budi Santoso, 081234567890<br>Citra Dewi, 0812-9988-7766
+    </div>
+    <div class="section-label">Unggah File (opsional)</div>
+    <input class="field" type="file" id="importFile" accept=".csv,.txt">
+    <div class="section-label">Atau Tempel Manual</div>
+    <textarea class="field" id="importTextarea" rows="8" style="resize:vertical; font-family:'IBM Plex Mono'; font-size:13px;" placeholder="Budi Santoso, 081234567890&#10;Citra Dewi, 081298887766"></textarea>
+    <button class="save-btn" id="previewImportBtn" style="margin-top:12px; background:var(--amber); color:var(--pine);">Pratinjau</button>
+    <div id="importPreviewWrap" style="display:none; margin-top:16px;">
+      <div class="section-label">Hasil Pratinjau</div>
+      <div class="date-summary" id="importSummary"></div>
+      <div class="cust-list" id="importPreviewList" style="max-height:260px;"></div>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="save-btn" id="confirmImportBtn" disabled>Impor 0 Pelanggan Baru</button>
+  </div>
+</div>
+
 <script>
+// ================= MODAL KONFIRMASI KUSTOM =================
+// Pengganti window.confirm(), karena confirm() bawaan browser tidak muncul saat
+// aplikasi dijalankan sebagai web app dari Home Screen di iPad/iPhone (mode standalone).
+const confirmOverlay = document.getElementById("confirmOverlay");
+const confirmBox = document.getElementById("confirmBox");
+const confirmMsg = document.getElementById("confirmMsg");
+const confirmOkBtn = document.getElementById("confirmOkBtn");
+const confirmCancelBtn = document.getElementById("confirmCancelBtn");
+let pendingConfirmAction = null;
+
+function showConfirm(message, onConfirm){
+  confirmMsg.textContent = message;
+  pendingConfirmAction = onConfirm;
+  confirmOverlay.classList.add("open");
+  confirmBox.classList.add("open");
+}
+function closeConfirm(){
+  confirmOverlay.classList.remove("open");
+  confirmBox.classList.remove("open");
+  pendingConfirmAction = null;
+}
+confirmOkBtn.addEventListener("click", ()=>{
+  const action = pendingConfirmAction;
+  closeConfirm();
+  if(action) action();
+});
+confirmCancelBtn.addEventListener("click", closeConfirm);
+confirmOverlay.addEventListener("click", closeConfirm);
+
 // ================= KONFIGURASI FIREBASE (SINKRON DATA ONLINE) =================
 // Langkah 1 sudah selesai disiapkan di sini. Nanti di Langkah 2-3, ganti nilai di bawah ini
 // dengan konfigurasi dari project Firebase kamu sendiri (Firebase Console → Project Settings → Your apps → SDK setup and configuration).
@@ -328,6 +408,7 @@ try{
 const FIRESTORE_SYNCED_KEYS = [
   "basecamp_customers",
   "basecamp_transactions",
+  "basecamp_deleted_transactions",
   "basecamp_bookings",
   "basecamp_custom_products",
   "basecamp_product_overrides"
@@ -439,7 +520,9 @@ const CATALOG = [
 const fmt = n => "Rp " + n.toLocaleString("id-ID");
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 const fmtDate = iso => { const d=new Date(iso+"T00:00:00"); return d.toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}); };
-const todayISO = () => new Date().toISOString().slice(0,10);
+const DAY_NAMES = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
+const fmtDateFull = iso => { const d=new Date(iso+"T00:00:00"); return `${DAY_NAMES[d.getDay()]}, ${fmtDate(iso)}`; };
+const todayISO = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const addDays = (iso,n) => { const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${da}`; };
 
 // ---------- persisted state ----------
@@ -453,8 +536,9 @@ function save(key, val){
 }
 
 let customers = load("basecamp_customers", []);      // [{id,name,phone}]
-let transactions = load("basecamp_transactions", []); // [{id,customer,items,durationDays,startDate,endDate,payment:{status,paidAmount},status,createdAt}]
-let bookings = load("basecamp_bookings", []);         // [{id,customer,items,durationDays,startDate,endDate,dp,total,status:'booking'|'diaktifkan'|'batal',linkedTxnId,createdAt}]
+let transactions = load("basecamp_transactions", []); // [{id,customer,items,durationDays,startDate,endDate,payment:{status,paidAmount,method},status,createdAt}]
+let deletedTransactions = load("basecamp_deleted_transactions", []); // riwayat transaksi yang dihapus (soft-delete), tetap tersimpan & bisa dipulihkan
+let bookings = load("basecamp_bookings", []);         // [{id,customer,items,durationDays,startDate,endDate,dp,paymentMethod,total,status:'booking'|'diaktifkan'|'batal',linkedTxnId,createdAt}]
 let customProducts = load("basecamp_custom_products", []); // manually-added products: [{id,name,cat,price,unit}]
 let productOverrides = load("basecamp_product_overrides", {}); // built-in product edits: id -> {name,cat,price}
 let cart = load("basecamp_cart_v2", {});               // id -> qty
@@ -480,6 +564,7 @@ function freshDraft(){
     dp: 0, // used only for booking mode
     discount: { type:"none", value:0 }, // 'none' | 'nominal' | 'persen'
     jaminan: { type:"none", note:"" }, // 'none' | 'ktp' | 'sim' | 'lain'
+    paymentMethod: "cash", // 'cash' | 'qris' | 'transfer'
     payment: { status:"hutang", paidAmount:0 }
   };
 }
@@ -509,14 +594,17 @@ document.querySelectorAll(".tab").forEach(btn=>{
     document.getElementById("katalogView").style.display = activeTab==="katalog" ? "" : "none";
     document.getElementById("bookingView").style.display = activeTab==="booking" ? "" : "none";
     document.getElementById("transaksiView").style.display = activeTab==="transaksi" ? "" : "none";
+    document.getElementById("pelangganView").style.display = activeTab==="pelanggan" ? "" : "none";
     document.getElementById("laporanView").style.display = activeTab==="laporan" ? "" : "none";
     document.getElementById("itemCountStat").textContent =
       activeTab==="katalog" ? (allProducts().length+" ITEM") :
       activeTab==="booking" ? (bookings.filter(b=>b.status==="booking").length+" MENUNGGU") :
+      activeTab==="pelanggan" ? (customers.length+" PELANGGAN") :
       activeTab==="laporan" ? "" :
       (transactions.length+" TRANSAKSI");
     if(activeTab==="transaksi") renderTransaksi();
     if(activeTab==="booking") renderBooking();
+    if(activeTab==="pelanggan") renderPelanggan();
     if(activeTab==="laporan") renderLaporan();
   });
 });
@@ -570,11 +658,12 @@ function renderCatalog(){
       const id = btn.dataset.delid;
       const p = customProducts.find(x=>x.id===id);
       if(!p) return;
-      if(!confirm(`Hapus produk manual "${p.name}"?`)) return;
-      customProducts = customProducts.filter(x=>x.id!==id);
-      save("basecamp_custom_products", customProducts);
-      delete cart[id]; save("basecamp_cart_v2", cart);
-      renderChips(); renderCatalog(); renderCartFab();
+      showConfirm(`Hapus produk manual "${p.name}"?`, ()=>{
+        customProducts = customProducts.filter(x=>x.id!==id);
+        save("basecamp_custom_products", customProducts);
+        delete cart[id]; save("basecamp_cart_v2", cart);
+        renderChips(); renderCatalog(); renderCartFab();
+      });
     });
   });
 }
@@ -727,6 +816,7 @@ function openEditTxn(id){
     startDate: t.startDate,
     discount: t.discount ? {...t.discount} : { type:"none", value:0 },
     jaminan: t.jaminan ? {...t.jaminan} : { type:"none", note:"" },
+    paymentMethod: t.payment.method || "cash",
     payment: {...t.payment}
   };
   renderCatalog(); renderCartFab();
@@ -756,6 +846,7 @@ function openEditBooking(id){
     jaminan: b.jaminan ? {...b.jaminan} : { type:"none", note:"" },
     dp: b.dp||0
   };
+  draft.paymentMethod = b.paymentMethod || "cash";
   renderCatalog(); renderCartFab();
   openDrawer();
 }
@@ -784,6 +875,7 @@ function openActivateBooking(id){
     discount: b.discount ? {...b.discount} : { type:"none", value:0 },
     jaminan: b.jaminan ? {...b.jaminan} : { type:"none", note:"" },
     dp: dp,
+    paymentMethod: b.paymentMethod || "cash",
     payment: { status: (b.total>0 && dp>=b.total) ? "lunas" : "sebagian", paidAmount: dp }
   };
   renderCatalog(); renderCartFab();
@@ -875,6 +967,9 @@ function renderCheckout(){
   const jamOptions = [["none","Tanpa Jaminan"],["ktp","KTP"],["sim","SIM"],["lain","Kartu Lain"]];
   const jamHtml = jamOptions.map(([k,label])=>`<button class="dur-chip ${draft.jaminan.type===k?'active':''}" data-jam="${k}">${label}</button>`).join("");
 
+  const methodOptions = [["cash","Cash"],["qris","QRIS"],["transfer","Transfer"]];
+  const methodHtml = methodOptions.map(([k,label])=>`<button class="dur-chip ${draft.paymentMethod===k?'active':''}" data-method="${k}">${label}</button>`).join("");
+
   checkoutBody.innerHTML = `
     ${modeToggleHtml}
     <div class="section-label">Item Sewa</div>
@@ -887,8 +982,8 @@ function renderCheckout(){
     <input class="field" type="date" id="startDate" value="${draft.startDate}">
     <div class="dur-chips">${durHtml}</div>
     <div class="date-summary">
-      Mulai sewa: <b>${fmtDate(draft.startDate)}</b><br>
-      Selesai sewa: <b>${fmtDate(endDate)}</b><br>
+      Mulai sewa: <b>${fmtDateFull(draft.startDate)}</b><br>
+      Selesai sewa: <b>${fmtDateFull(endDate)}</b><br>
       <span class="tol">Toleransi pengembalian sampai pukul 20:00 WITA di tanggal selesai.</span>
     </div>
 
@@ -917,6 +1012,8 @@ function renderCheckout(){
         Total estimasi sewa: <b>${fmt(grandTotal)}</b><br>
         Sisa dibayar saat ambil barang: <b>${fmt(Math.max(0, grandTotal - (draft.dp||0)))}</b>
       </div>
+      <div class="section-label">Metode Pembayaran (DP)</div>
+      <div class="dur-chips">${methodHtml}</div>
     ` : `
       <div class="section-label">Status Pembayaran</div>
       <div class="pay-toggle">${payHtml}</div>
@@ -924,6 +1021,8 @@ function renderCheckout(){
         <input class="field" type="number" min="0" id="paidAmount" placeholder="Jumlah sudah dibayar" value="${draft.payment.paidAmount||''}">
         <div class="date-summary">Sisa tagihan: <b>${fmt(Math.max(0, grandTotal - (draft.payment.paidAmount||0)))}</b></div>
       ` : ""}
+      <div class="section-label">Metode Pembayaran</div>
+      <div class="dur-chips">${methodHtml}</div>
     `}
   `;
 
@@ -1025,6 +1124,10 @@ function renderCheckout(){
   const dpAmount = document.getElementById("dpAmount");
   if(dpAmount) dpAmount.addEventListener("input", e=>{ draft.dp = parseInt(e.target.value)||0; renderCheckout(); });
 
+  checkoutBody.querySelectorAll("[data-method]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ draft.paymentMethod = btn.dataset.method; renderCheckout(); });
+  });
+
   // restore focus/caret on the field the admin was typing in
   if(restoreId){
     const el = document.getElementById(restoreId);
@@ -1077,7 +1180,7 @@ saveBtn.addEventListener("click", ()=>{
       t.subtotal = periodSubtotal;
       t.discount = { type: draft.discount.type, value: draft.discount.value||0, amount: discountAmount };
       t.jaminan = { type: draft.jaminan.type, note: draft.jaminan.note||"" };
-      t.payment = { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0) };
+      t.payment = { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0), method: draft.paymentMethod };
       t.total = grandTotal;
       t.updatedAt = new Date().toISOString();
       save("basecamp_transactions", transactions);
@@ -1103,6 +1206,7 @@ saveBtn.addEventListener("click", ()=>{
       b.discount = { type: draft.discount.type, value: draft.discount.value||0, amount: discountAmount };
       b.jaminan = { type: draft.jaminan.type, note: draft.jaminan.note||"" };
       b.dp = draft.dp||0;
+      b.paymentMethod = draft.paymentMethod;
       b.total = grandTotal;
       b.updatedAt = new Date().toISOString();
       save("basecamp_bookings", bookings);
@@ -1131,7 +1235,7 @@ saveBtn.addEventListener("click", ()=>{
       subtotal: periodSubtotal,
       discount: { type: draft.discount.type, value: draft.discount.value||0, amount: discountAmount },
       jaminan: { type: draft.jaminan.type, note: draft.jaminan.note||"" },
-      payment: { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0) },
+      payment: { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0), method: draft.paymentMethod },
       total: grandTotal,
       status: "aktif",
       fromBookingId: b ? b.id : null,
@@ -1169,6 +1273,7 @@ saveBtn.addEventListener("click", ()=>{
       discount: { type: draft.discount.type, value: draft.discount.value||0, amount: discountAmount },
       jaminan: { type: draft.jaminan.type, note: draft.jaminan.note||"" },
       dp: draft.dp||0,
+      paymentMethod: draft.paymentMethod,
       total: grandTotal,
       status: "booking",
       createdAt: new Date().toISOString()
@@ -1197,7 +1302,7 @@ saveBtn.addEventListener("click", ()=>{
     subtotal: periodSubtotal,
     discount: { type: draft.discount.type, value: draft.discount.value||0, amount: discountAmount },
     jaminan: { type: draft.jaminan.type, note: draft.jaminan.note||"" },
-    payment: { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0) },
+    payment: { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0), method: draft.paymentMethod },
     total: grandTotal,
     status: "aktif",
     createdAt: new Date().toISOString()
@@ -1211,15 +1316,17 @@ saveBtn.addEventListener("click", ()=>{
 const transaksiEl = document.getElementById("transaksiView");
 function renderTransaksi(){
   document.getElementById("itemCountStat").textContent = transactions.length + " TRANSAKSI";
-  const filters = ["Semua","Aktif","Selesai"];
+  const filters = ["Semua","Aktif","Selesai","Terhapus"];
   let list = transactions;
   if(txnFilter==="Aktif") list = transactions.filter(t=>t.status==="aktif");
   if(txnFilter==="Selesai") list = transactions.filter(t=>t.status==="selesai");
+  const isDeletedView = txnFilter==="Terhapus";
+  if(isDeletedView) list = deletedTransactions;
 
-  let html = `<div class="chips" style="margin-top:0">${filters.map(f=>`<button class="chip ${txnFilter===f?'active':''}" data-f="${f}">${f.toUpperCase()}</button>`).join("")}</div>`;
+  let html = `<div class="chips" style="margin-top:0">${filters.map(f=>`<button class="chip ${txnFilter===f?'active':''}" data-f="${f}">${f.toUpperCase()}${f==='Terhapus' && deletedTransactions.length>0 ? ' ('+deletedTransactions.length+')' : ''}</button>`).join("")}</div>`;
 
   if(list.length===0){
-    html += `<div class="empty">Belum ada transaksi${txnFilter!=='Semua' ? ' dengan status ini' : ''}.</div>`;
+    html += `<div class="empty">${isDeletedView ? 'Belum ada transaksi yang dihapus.' : 'Belum ada transaksi'+(txnFilter!=='Semua' ? ' dengan status ini.' : '.')}</div>`;
   } else {
     html += list.map(t=>{
       const itemsStr = t.items.map(i=>`${i.name} ×${i.qty}`).join(", ");
@@ -1229,15 +1336,22 @@ function renderTransaksi(){
         <div class="txn-top">
           <div><div class="cn">${t.customer.name}</div><div class="cp">${t.customer.phone}</div></div>
           <div class="badges">
-            <span class="badge badge-${t.status}">${t.status==='aktif'?'AKTIF':'SELESAI'}</span>
+            ${isDeletedView ? `<span class="badge badge-selesai">DIHAPUS</span>` : `<span class="badge badge-${t.status}">${t.status==='aktif'?'AKTIF':'SELESAI'}</span>`}
             <span class="badge badge-${t.payment.status}">${t.payment.status==='hutang'?'BELUM BAYAR':t.payment.status==='sebagian'?'SEBAGIAN':'LUNAS'}</span>
+            <span class="badge badge-method">${methodLabel(t.payment.method)}</span>
           </div>
         </div>
-        <div class="txn-dates">${fmtDate(t.startDate)} → ${fmtDate(t.endDate)} · ${t.durationDays} hari · toleransi s.d. 20:00 WITA</div>
+        <div class="txn-dates">${fmtDateFull(t.startDate)} → ${fmtDateFull(t.endDate)} · ${t.durationDays} hari · toleransi s.d. 20:00 WITA</div>
         ${t.jaminan && t.jaminan.type!=='none' ? `<div class="txn-dates">Jaminan: ${jaminanLabel(t.jaminan)}</div>` : ''}
         <div class="txn-items">${itemsStr}</div>
         ${t.discount && t.discount.amount>0 ? `<div class="txn-items" style="margin-top:-6px">Subtotal ${fmt(t.subtotal)} · Diskon −${fmt(t.discount.amount)}</div>` : ''}
         <div class="txn-total">${fmt(t.total)}${t.payment.status==='sebagian' ? ` <span style="font-size:12px; color:var(--canvas-dim); font-family:'IBM Plex Mono'">(sisa ${fmt(sisa)})</span>` : ''}</div>
+        ${isDeletedView ? `
+        <div class="txn-dates">Dihapus: ${t.deletedAt ? fmtDateFull(localDateFromISO(t.deletedAt)) : '-'}</div>
+        <div class="txn-actions">
+          <button class="restore-txn-btn" data-id="${t.id}">↩ Pulihkan Transaksi</button>
+        </div>
+        ` : `
         <div class="txn-actions">
           <button class="edit-btn" data-id="${t.id}">✎ Edit</button>
           <button class="toggle-status" data-id="${t.id}">${t.status==='aktif' ? 'Tandai Selesai' : 'Aktifkan Lagi'}</button>
@@ -1246,9 +1360,15 @@ function renderTransaksi(){
             <option value="sebagian" ${t.payment.status==='sebagian'?'selected':''}>Sebagian</option>
             <option value="lunas" ${t.payment.status==='lunas'?'selected':''}>Lunas</option>
           </select>
+          <select class="method-select" data-id="${t.id}">
+            <option value="cash" ${(!t.payment.method||t.payment.method==='cash')?'selected':''}>Cash</option>
+            <option value="qris" ${t.payment.method==='qris'?'selected':''}>QRIS</option>
+            <option value="transfer" ${t.payment.method==='transfer'?'selected':''}>Transfer</option>
+          </select>
           <button class="wa-btn" data-id="${t.id}">Kirim WA</button>
           <button class="del-btn" data-id="${t.id}">Hapus</button>
         </div>
+        `}
       </div>`;
     }).join("");
   }
@@ -1278,11 +1398,39 @@ function renderTransaksi(){
       renderTransaksi();
     });
   });
+  transaksiEl.querySelectorAll(".method-select").forEach(sel=>{
+    sel.addEventListener("change", ()=>{
+      const t = transactions.find(x=>x.id===sel.dataset.id);
+      t.payment.method = sel.value;
+      save("basecamp_transactions", transactions);
+      renderTransaksi();
+    });
+  });
   transaksiEl.querySelectorAll(".del-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
-      if(!confirm("Hapus transaksi ini?")) return;
-      transactions = transactions.filter(x=>x.id!==btn.dataset.id);
-      save("basecamp_transactions", transactions);
+      showConfirm("Hapus transaksi ini? Transaksi akan dipindah ke riwayat Terhapus dan masih bisa dipulihkan kapan saja.", ()=>{
+        const idx = transactions.findIndex(x=>x.id===btn.dataset.id);
+        if(idx>-1){
+          const [removed] = transactions.splice(idx,1);
+          removed.deletedAt = new Date().toISOString();
+          deletedTransactions.unshift(removed);
+          save("basecamp_transactions", transactions);
+          save("basecamp_deleted_transactions", deletedTransactions);
+        }
+        renderTransaksi();
+      });
+    });
+  });
+  transaksiEl.querySelectorAll(".restore-txn-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const idx = deletedTransactions.findIndex(x=>x.id===btn.dataset.id);
+      if(idx>-1){
+        const [restored] = deletedTransactions.splice(idx,1);
+        delete restored.deletedAt;
+        transactions.unshift(restored);
+        save("basecamp_transactions", transactions);
+        save("basecamp_deleted_transactions", deletedTransactions);
+      }
       renderTransaksi();
     });
   });
@@ -1299,6 +1447,17 @@ function jaminanLabel(j){
   const base = j.type==="ktp" ? "KTP" : j.type==="sim" ? "SIM" : "Kartu Lain";
   return j.note ? `${base} (${j.note})` : base;
 }
+function methodLabel(m){ return m==="qris" ? "QRIS" : m==="transfer" ? "Transfer" : "Cash"; }
+
+// Jam buka toko: Senin-Kamis 10:00-22:00, Jumat-Minggu 08:00-22:00
+function storeHoursForDate(iso){
+  const dow = new Date(iso+"T00:00:00").getDay(); // 0=Minggu ... 6=Sabtu
+  return (dow>=1 && dow<=4) ? "10:00–22:00" : "08:00–22:00";
+}
+function toleransiLine(endDateIso){
+  const dayName = DAY_NAMES[new Date(endDateIso+"T00:00:00").getDay()];
+  return `⏰ Pada hari ${dayName} kami buka pukul ${storeHoursForDate(endDateIso)}, tapi toleransi pengembalian bisa sampai pukul 20:00 yah\n`;
+}
 
 function buildReceiptMessage(t){
   const div = "━━━━━━━━━━━━━━━";
@@ -1313,10 +1472,10 @@ function buildReceiptMessage(t){
     msg += `• ${i.name} ×${i.qty} — ${fmt(lineTotal)}\n`;
   });
   msg += `${div}\n`;
-  msg += `📅 Mulai   : ${fmtDate(t.startDate)}\n`;
-  msg += `📅 Selesai : ${fmtDate(t.endDate)}\n`;
+  msg += `📅 Mulai   : ${fmtDateFull(t.startDate)}\n`;
+  msg += `📅 Selesai : ${fmtDateFull(t.endDate)}\n`;
   msg += `⏱️ Lama Sewa: ${t.durationDays} hari\n`;
-  msg += `⚠️ Toleransi pengembalian s.d. 20:00 WITA\n`;
+  msg += toleransiLine(t.endDate);
   if(t.jaminan && t.jaminan.type!=="none") msg += `🪪 Jaminan  : ${jaminanLabel(t.jaminan)}\n`;
   msg += `${div}\n`;
   if(t.discount && t.discount.amount>0){
@@ -1325,6 +1484,7 @@ function buildReceiptMessage(t){
   }
   msg += `💰 *TOTAL: ${fmt(t.total)}*\n`;
   msg += `Status Bayar: *${payLabel}*\n`;
+  msg += `Metode Bayar: *${methodLabel(t.payment.method)}*\n`;
   if(t.payment.status==="sebagian") msg += `Sudah dibayar: ${fmt(t.payment.paidAmount||0)} · Sisa: *${fmt(sisa)}*\n`;
   msg += `${div}\n🙏 Terima kasih telah menyewa di Prof Camping!`;
   return msg;
@@ -1359,9 +1519,10 @@ function renderBooking(){
           <div><div class="cn">${b.customer.name}</div><div class="cp">${b.customer.phone}</div></div>
           <div class="badges">
             <span class="badge badge-${b.status}">${statusLabel}</span>
+            <span class="badge badge-method">${methodLabel(b.paymentMethod)}</span>
           </div>
         </div>
-        <div class="txn-dates">${fmtDate(b.startDate)} → ${fmtDate(b.endDate)} · ${b.durationDays} hari</div>
+        <div class="txn-dates">${fmtDateFull(b.startDate)} → ${fmtDateFull(b.endDate)} · ${b.durationDays} hari</div>
         ${b.jaminan && b.jaminan.type!=='none' ? `<div class="txn-dates">Jaminan: ${jaminanLabel(b.jaminan)}</div>` : ''}
         <div class="txn-items">${itemsStr}</div>
         ${b.discount && b.discount.amount>0 ? `<div class="txn-items" style="margin-top:-6px">Subtotal ${fmt(b.subtotal)} · Diskon −${fmt(b.discount.amount)}</div>` : ''}
@@ -1395,11 +1556,12 @@ function renderBooking(){
   });
   bookingEl.querySelectorAll(".cancel-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
-      if(!confirm("Batalkan booking ini?")) return;
-      const b = bookings.find(x=>x.id===btn.dataset.id);
-      b.status = "batal"; b.updatedAt = new Date().toISOString();
-      save("basecamp_bookings", bookings);
-      renderBooking();
+      showConfirm("Batalkan booking ini?", ()=>{
+        const b = bookings.find(x=>x.id===btn.dataset.id);
+        b.status = "batal"; b.updatedAt = new Date().toISOString();
+        save("basecamp_bookings", bookings);
+        renderBooking();
+      });
     });
   });
   bookingEl.querySelectorAll(".restore-booking-btn").forEach(btn=>{
@@ -1412,10 +1574,11 @@ function renderBooking(){
   });
   bookingEl.querySelectorAll(".del-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
-      if(!confirm("Hapus booking ini?")) return;
-      bookings = bookings.filter(x=>x.id!==btn.dataset.id);
-      save("basecamp_bookings", bookings);
-      renderBooking();
+      showConfirm("Hapus booking ini?", ()=>{
+        bookings = bookings.filter(x=>x.id!==btn.dataset.id);
+        save("basecamp_bookings", bookings);
+        renderBooking();
+      });
     });
   });
   bookingEl.querySelectorAll(".wa-btn").forEach(btn=>{
@@ -1437,9 +1600,10 @@ function buildBookingMessage(b){
     msg += `• ${i.name} ×${i.qty} — ${fmt(lineTotal)}\n`;
   });
   msg += `${div}\n`;
-  msg += `📅 Mulai   : ${fmtDate(b.startDate)}\n`;
-  msg += `📅 Selesai : ${fmtDate(b.endDate)}\n`;
+  msg += `📅 Mulai   : ${fmtDateFull(b.startDate)}\n`;
+  msg += `📅 Selesai : ${fmtDateFull(b.endDate)}\n`;
   msg += `⏱️ Lama Sewa: ${b.durationDays} hari\n`;
+  msg += toleransiLine(b.endDate);
   if(b.jaminan && b.jaminan.type!=="none") msg += `🪪 Jaminan  : ${jaminanLabel(b.jaminan)}\n`;
   msg += `${div}\n`;
   if(b.discount && b.discount.amount>0){
@@ -1448,6 +1612,7 @@ function buildBookingMessage(b){
   }
   msg += `💰 *TOTAL SEWA: ${fmt(b.total)}*\n`;
   msg += `Uang Muka (DP): *${fmt(b.dp||0)}*\n`;
+  msg += `Metode Bayar DP: *${methodLabel(b.paymentMethod)}*\n`;
   msg += `Sisa dibayar saat ambil barang: *${fmt(sisa)}*\n`;
   msg += `${div}\n`;
   msg += `⚠️ Jangan lupa bawa jaminan berupa KTP/SIM saat pengambilan barang yah.\n`;
@@ -1456,6 +1621,170 @@ function buildBookingMessage(b){
 }
 
 // ================= LAPORAN (INCOME REPORT + PRODUCT RECAP) =================
+// ================= PELANGGAN =================
+const pelangganEl = document.getElementById("pelangganView");
+let pelangganQuery = "";
+
+function renderPelanggan(){
+  document.getElementById("itemCountStat").textContent = customers.length + " PELANGGAN";
+
+  const active = document.activeElement;
+  const restoreFocus = active && active.id==="pelangganSearch";
+  const restoreStart = restoreFocus ? active.selectionStart : null;
+  const restoreEnd = restoreFocus ? active.selectionEnd : null;
+
+  const list = customers.filter(c =>
+    !pelangganQuery ||
+    c.name.toLowerCase().includes(pelangganQuery.toLowerCase()) ||
+    c.phone.includes(pelangganQuery)
+  );
+
+  let html = `
+    <div class="searchbar"><input id="pelangganSearch" type="text" placeholder="Cari nama / nomor HP…" value="${pelangganQuery}"></div>
+    <div style="display:flex; justify-content:flex-end; margin:10px 0 16px;">
+      <button id="openImportBtn" class="add-product-btn">⇪ Impor Banyak Pelanggan</button>
+    </div>
+  `;
+
+  if(list.length===0){
+    html += `<div class="empty">${customers.length===0 ? 'Belum ada data pelanggan. Tambahkan lewat checkout, atau impor banyak sekaligus.' : 'Tidak ditemukan.'}</div>`;
+  } else {
+    html += `<div class="cust-list" style="max-height:none; border:none;">` + list.map(c => `
+      <div class="cust-row" style="cursor:default;">
+        <div><div class="cn">${c.name}</div><div class="cp">${c.phone}</div></div>
+        <button class="del-cust-btn" data-id="${c.id}" style="background:none; border:none; color:var(--brick); font-family:'IBM Plex Mono'; font-size:11px; cursor:pointer;">HAPUS</button>
+      </div>
+    `).join("") + `</div>`;
+  }
+
+  pelangganEl.innerHTML = html;
+
+  const searchInput = document.getElementById("pelangganSearch");
+  searchInput.addEventListener("input", e=>{ pelangganQuery = e.target.value; renderPelanggan(); });
+  if(restoreFocus){
+    searchInput.focus();
+    if(restoreStart!=null){ try{ searchInput.setSelectionRange(restoreStart, restoreEnd); }catch(e){} }
+  }
+
+  document.getElementById("openImportBtn").addEventListener("click", openImportDrawer);
+
+  pelangganEl.querySelectorAll(".del-cust-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const c = customers.find(x=>x.id===btn.dataset.id);
+      if(!c) return;
+      showConfirm(`Hapus pelanggan "${c.name}"? Riwayat transaksi lama tidak akan ikut terhapus.`, ()=>{
+        customers = customers.filter(x=>x.id!==c.id);
+        save("basecamp_customers", customers);
+        renderPelanggan();
+      });
+    });
+  });
+}
+
+// ---- IMPOR BANYAK PELANGGAN ----
+const importOverlay = document.getElementById("importOverlay");
+const importDrawer = document.getElementById("importDrawer");
+const importTextarea = document.getElementById("importTextarea");
+const importFile = document.getElementById("importFile");
+const previewImportBtn = document.getElementById("previewImportBtn");
+const importPreviewWrap = document.getElementById("importPreviewWrap");
+const importSummary = document.getElementById("importSummary");
+const importPreviewList = document.getElementById("importPreviewList");
+const confirmImportBtn = document.getElementById("confirmImportBtn");
+let importParsed = []; // hasil parsing yang siap diimpor (belum ada di data)
+
+function openImportDrawer(){
+  importTextarea.value = "";
+  importFile.value = "";
+  importPreviewWrap.style.display = "none";
+  importParsed = [];
+  confirmImportBtn.disabled = true;
+  confirmImportBtn.textContent = "Impor 0 Pelanggan Baru";
+  importOverlay.classList.add("open");
+  importDrawer.classList.add("open");
+}
+function closeImportDrawer(){
+  importOverlay.classList.remove("open");
+  importDrawer.classList.remove("open");
+}
+document.getElementById("closeImportDrawer").addEventListener("click", closeImportDrawer);
+importOverlay.addEventListener("click", closeImportDrawer);
+
+importFile.addEventListener("change", ()=>{
+  const file = importFile.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { importTextarea.value = e.target.result; };
+  reader.readAsText(file);
+});
+
+// Menerima baris berformat "Nama, Nomor HP" (boleh pisah koma/titik-koma/tab).
+// Nomor yang diawali 0 otomatis diubah jadi awalan 62 supaya siap dipakai untuk WhatsApp.
+function parseBulkContacts(text){
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const results = [];
+  for(const line of lines){
+    if(/^(nama|name|contact|kontak|phone|nomor|no\.?\s*hp)\b/i.test(line) && (line.match(/\d/g)||[]).length < 5) continue;
+    const parts = line.split(/[,;\t]+/).map(p=>p.trim()).filter(Boolean);
+    if(parts.length===0) continue;
+    const phoneIdx = parts.findIndex(p => (p.match(/\d/g)||[]).length >= 5);
+    if(phoneIdx===-1) continue;
+    let phone = parts[phoneIdx].replace(/[^0-9]/g,"");
+    if(!phone) continue;
+    if(phone.startsWith("0")) phone = "62"+phone.slice(1);
+    let name = parts.filter((p,i)=>i!==phoneIdx).join(" ").trim();
+    if(!name) name = "Tanpa Nama";
+    results.push({ name, phone });
+  }
+  return results;
+}
+
+previewImportBtn.addEventListener("click", ()=>{
+  const parsed = parseBulkContacts(importTextarea.value);
+  const existingPhones = new Set(customers.map(c=>c.phone));
+  const seenInBatch = new Set();
+  const rows = [];
+  importParsed = [];
+  parsed.forEach(p=>{
+    let statusLabel, statusColor, willImport = false;
+    if(existingPhones.has(p.phone)){
+      statusLabel = "SUDAH ADA"; statusColor = "var(--canvas-dim)";
+    } else if(seenInBatch.has(p.phone)){
+      statusLabel = "DUPLIKAT"; statusColor = "var(--canvas-dim)";
+    } else {
+      statusLabel = "BARU"; statusColor = "var(--amber-bright)";
+      willImport = true;
+      seenInBatch.add(p.phone);
+      importParsed.push(p);
+    }
+    rows.push(`<div class="cust-row" style="cursor:default;">
+      <div><div class="cn">${p.name}</div><div class="cp">${p.phone}</div></div>
+      <span style="font-family:'IBM Plex Mono'; font-size:10px; color:${statusColor}">${statusLabel}</span>
+    </div>`);
+  });
+
+  importPreviewWrap.style.display = parsed.length ? "" : "none";
+  importSummary.innerHTML = parsed.length
+    ? `Ditemukan <b>${parsed.length}</b> baris · <b>${importParsed.length}</b> pelanggan baru siap diimpor · ${parsed.length-importParsed.length} dilewati (sudah ada/duplikat).`
+    : `Tidak ada data yang terbaca. Pastikan formatnya "Nama, Nomor HP" per baris.`;
+  importPreviewList.innerHTML = rows.join("") || `<div class="empty" style="padding:16px">-</div>`;
+
+  confirmImportBtn.disabled = importParsed.length===0;
+  confirmImportBtn.textContent = `Impor ${importParsed.length} Pelanggan Baru`;
+});
+
+confirmImportBtn.addEventListener("click", ()=>{
+  if(importParsed.length===0) return;
+  importParsed.forEach(p=>{
+    customers.push({ id: uid(), name: p.name, phone: p.phone });
+  });
+  save("basecamp_customers", customers);
+  const count = importParsed.length;
+  closeImportDrawer();
+  renderPelanggan();
+  importSummary.innerHTML = `✓ Berhasil mengimpor ${count} pelanggan baru.`;
+});
+
 const laporanEl = document.getElementById("laporanView");
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -1465,7 +1794,8 @@ function localDateFromISO(isoString){
   const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,"0"), da = String(d.getDate()).padStart(2,"0");
   return `${y}-${m}-${da}`;
 }
-function txnLocalDate(t){ return localDateFromISO(t.createdAt); }
+// Rekap/laporan mengikuti tanggal MULAI SEWA (barang diambil), bukan waktu transaksi dicatat di sistem.
+function txnLocalDate(t){ return t.startDate; }
 
 function daysBetweenInclusive(startISO, endISO){
   const a = new Date(startISO+"T00:00:00"), b = new Date(endISO+"T00:00:00");
@@ -1676,6 +2006,7 @@ function rerenderCurrentTab(){
   if(activeTab==="katalog"){ renderChips(); renderCatalog(); }
   else if(activeTab==="booking"){ renderBooking(); }
   else if(activeTab==="transaksi"){ renderTransaksi(); }
+  else if(activeTab==="pelanggan"){ renderPelanggan(); }
   else if(activeTab==="laporan"){ renderLaporan(); }
   renderCartFab();
 }
@@ -1693,6 +2024,7 @@ if(firebaseEnabled){
 
   attachFirestoreSync("basecamp_customers", v=>{ customers = v; });
   attachFirestoreSync("basecamp_transactions", v=>{ transactions = v; });
+  attachFirestoreSync("basecamp_deleted_transactions", v=>{ deletedTransactions = v; });
   attachFirestoreSync("basecamp_bookings", v=>{ bookings = v; });
   attachFirestoreSync("basecamp_custom_products", v=>{ customProducts = v; });
   attachFirestoreSync("basecamp_product_overrides", v=>{
