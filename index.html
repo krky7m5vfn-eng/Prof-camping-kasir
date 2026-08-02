@@ -404,6 +404,29 @@
   </div>
 </div>
 
+<div class="overlay" id="bayarOverlay"></div>
+<div class="drawer" id="bayarDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-head"><h2>Catat Pembayaran</h2><button id="closeBayarDrawer">TUTUP ✕</button></div>
+  <div class="drawer-body">
+    <div class="date-summary" id="bayarInfo"></div>
+    <div class="section-label">Nominal Diterima (Rp)</div>
+    <input class="field" type="number" min="0" id="bayarAmount" placeholder="Contoh: 50000">
+    <div class="section-label">Metode Bayar</div>
+    <div class="dur-chips">
+      <button class="dur-chip active" data-bm="cash">Cash</button>
+      <button class="dur-chip" data-bm="qris">QRIS</button>
+      <button class="dur-chip" data-bm="transfer">Transfer</button>
+    </div>
+    <div class="section-label">Catatan (opsional)</div>
+    <input class="field" id="bayarNote" placeholder="Contoh: DP pertama / Pelunasan sisa">
+    <div id="bayarError" style="color:#e0897d; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
+  </div>
+  <div class="drawer-foot">
+    <button class="save-btn" id="saveBayarBtn">Simpan Pembayaran</button>
+  </div>
+</div>
+
 <div class="overlay" id="extendOverlay"></div>
 <div class="drawer" id="extendDrawer">
   <div class="drawer-handle"></div>
@@ -486,6 +509,45 @@ const FIRESTORE_SYNCED_KEYS = [
   "basecamp_custom_products",
   "basecamp_product_overrides"
 ];
+
+// ================= KONEKSI KE GOOGLE SHEETS (rekap transaksi otomatis) =================
+// Isi dengan URL "Web app" hasil deploy Google Apps Script (lihat panduan setup dari Claude).
+// Selama masih "GANTI_DENGAN_URL_APPS_SCRIPT", fitur ini otomatis nonaktif dan tidak memengaruhi aplikasi sama sekali.
+const GOOGLE_SHEETS_URL = "GANTI_DENGAN_URL_APPS_SCRIPT";
+const googleSheetsEnabled = GOOGLE_SHEETS_URL && !GOOGLE_SHEETS_URL.startsWith("GANTI_");
+
+function syncTransactionsToSheet(list){
+  if(!googleSheetsEnabled) return;
+  const rows = list.map(t=>({
+    id: t.id,
+    tanggalTransaksi: txnLocalDate(t),
+    pelanggan: t.customer.name,
+    noHp: t.customer.phone,
+    barang: t.items.map(i=>`${i.name} x${i.qty}`).join(", "),
+    mulaiSewa: t.startDate,
+    selesaiSewa: t.endDate,
+    lamaHari: t.durationDays,
+    subtotal: t.subtotal,
+    diskon: t.discount ? t.discount.amount : 0,
+    total: t.total,
+    statusTransaksi: t.status,
+    statusBayar: t.payment.status,
+    sudahDibayar: t.payment.paidAmount||0,
+    sisaTagihan: Math.max(0, t.total-(t.payment.paidAmount||0)),
+    metodeBayar: t.payment.method||"cash",
+    totalDendaBelumLunas: (t.dendaList||[]).filter(d=>!d.paid).reduce((s,d)=>s+d.amount,0),
+    jaminan: t.jaminan && t.jaminan.type!=="none" ? jaminanLabel(t.jaminan) : "-",
+    statusJaminan: t.jaminan && t.jaminan.type!=="none" ? (t.jaminanReturned ? "Sudah Dikembalikan" : "Ditahan") : "-",
+  }));
+  // mode:"no-cors" + Content-Type text/plain supaya jadi "simple request" (Apps Script Web App tidak menangani preflight OPTIONS)
+  fetch(GOOGLE_SHEETS_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "text/plain" },
+    body: JSON.stringify({ transactions: rows })
+  }).catch(err=>console.error("Gagal sinkron ke Google Sheets:", err));
+}
+const syncTransactionsToSheetDebounced = debounce(syncTransactionsToSheet, 800);
 
 // ================= LOGIN ADMIN (FIREBASE AUTHENTICATION) =================
 let auth = null;
@@ -611,6 +673,9 @@ function save(key, val){
   if(firebaseEnabled && FIRESTORE_SYNCED_KEYS.includes(key)){
     db.collection("prof_camping_data").doc(key).set({ value: val, updatedAt: Date.now() })
       .catch(err=>console.error("Gagal sinkron ke Firebase untuk", key, err));
+  }
+  if(key==="basecamp_transactions" && googleSheetsEnabled){
+    syncTransactionsToSheetDebounced(val);
   }
 }
 
@@ -1363,6 +1428,10 @@ saveBtn.addEventListener("click", ()=>{
   if(draft.discount.type==="nominal") discountAmount = Math.min(draft.discount.value||0, periodSubtotal);
   else if(draft.discount.type==="persen") discountAmount = Math.round(periodSubtotal * Math.min(draft.discount.value||0,100) / 100);
   const grandTotal = Math.max(0, periodSubtotal - discountAmount);
+  const initialPaidAmount = draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0);
+  function buildInitialPaymentHistory(amount, method){
+    return amount>0 ? [{ id: uid(), amount, method, note: "Pembayaran awal", at: new Date().toISOString() }] : [];
+  }
 
   function syncCustomerInCustomersList(customer){
     const idx = customers.findIndex(c=>c.id===customer.id);
@@ -1449,7 +1518,8 @@ saveBtn.addEventListener("click", ()=>{
       subtotal: periodSubtotal,
       discount: { type: draft.discount.type, value: draft.discount.value||0, amount: discountAmount },
       jaminan: { type: draft.jaminan.type, note: draft.jaminan.note||"" },
-      payment: { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0), method: draft.paymentMethod },
+      payment: { status: draft.payment.status, paidAmount: initialPaidAmount, method: draft.paymentMethod },
+      paymentHistory: buildInitialPaymentHistory(initialPaidAmount, draft.paymentMethod),
       total: grandTotal,
       status: "aktif",
       dendaList: [],
@@ -1518,7 +1588,8 @@ saveBtn.addEventListener("click", ()=>{
     subtotal: periodSubtotal,
     discount: { type: draft.discount.type, value: draft.discount.value||0, amount: discountAmount },
     jaminan: { type: draft.jaminan.type, note: draft.jaminan.note||"" },
-    payment: { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0), method: draft.paymentMethod },
+    payment: { status: draft.payment.status, paidAmount: initialPaidAmount, method: draft.paymentMethod },
+    paymentHistory: buildInitialPaymentHistory(initialPaidAmount, draft.paymentMethod),
     total: grandTotal,
     status: "aktif",
     dendaList: [],
@@ -1608,6 +1679,19 @@ function renderTransaksi(){
           </div>
         `).join("")}
       ` : "";
+      const paymentHistory = t.paymentHistory || [];
+      const payHistoryHtml = paymentHistory.length>0 ? `
+        <div class="section-label" style="margin:14px 0 6px">Riwayat Pembayaran</div>
+        ${paymentHistory.map(h=>`
+          <div class="denda-row paid">
+            <div class="dr-info">
+              <div class="dr-reason">${fmt(h.amount)} · ${methodLabel(h.method)}${h.note ? ` — ${h.note}` : ""}</div>
+              <div class="dr-amount">${fmtDateFull(localDateFromISO(h.at))}</div>
+            </div>
+            ${!isDeletedView ? `<div class="dr-actions"><button class="del-bayar" data-txn="${t.id}" data-bayar="${h.id}">Hapus</button></div>` : ""}
+          </div>
+        `).join("")}
+      ` : "";
       return `
       <div class="txn-card" data-id="${t.id}">
         <div class="txn-top">
@@ -1627,6 +1711,7 @@ function renderTransaksi(){
         ${t.extensions && t.extensions.length>0 ? `<div class="txn-dates">Diperpanjang ${t.extensions.length}× (total +${t.extensions.reduce((s,e)=>s+e.days,0)} hari)</div>` : ""}
         ${dendaUnpaidTotal>0 ? `<div class="txn-dates" style="color:#e0897d">Total denda belum lunas: <b>${fmt(dendaUnpaidTotal)}</b></div>` : ""}
         ${dendaHtml}
+        ${payHistoryHtml}
         ${isDeletedView ? `
         <div class="txn-dates">Dihapus: ${t.deletedAt ? fmtDateFull(localDateFromISO(t.deletedAt)) : '-'}</div>
         <div class="txn-actions">
@@ -1638,6 +1723,7 @@ function renderTransaksi(){
           ${t.status==='aktif' ? `<button class="extend-btn" data-id="${t.id}">⏱ Perpanjang</button>` : ""}
           <button class="toggle-status" data-id="${t.id}">${t.status==='aktif' ? 'Tandai Selesai' : 'Aktifkan Lagi'}</button>
           <button class="add-denda-btn" data-id="${t.id}">+ Denda</button>
+          ${t.payment.status!=='lunas' ? `<button class="add-bayar-btn" data-id="${t.id}">+ Bayar</button>` : ""}
           ${t.jaminan && t.jaminan.type!=='none' ? `<button class="toggle-jaminan-btn" data-id="${t.id}">${jaminanHeld ? '✅ Kembalikan Jaminan' : '↩ Tandai Ditahan Lagi'}</button>` : ""}
           <select class="pay-select" data-id="${t.id}">
             <option value="hutang" ${t.payment.status==='hutang'?'selected':''}>Belum Bayar</option>
@@ -1706,6 +1792,21 @@ function renderTransaksi(){
   });
   transaksiEl.querySelectorAll(".add-denda-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{ openDendaDrawer(btn.dataset.id); });
+  });
+  transaksiEl.querySelectorAll(".add-bayar-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ openBayarDrawer(btn.dataset.id); });
+  });
+  transaksiEl.querySelectorAll(".del-bayar").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const t = transactions.find(x=>x.id===btn.dataset.txn);
+      if(!t) return;
+      showConfirm("Hapus catatan pembayaran ini? Nominal terbayar akan dikurangi sesuai jumlah ini.", ()=>{
+        t.paymentHistory = (t.paymentHistory||[]).filter(x=>x.id!==btn.dataset.bayar);
+        recomputePaymentFromHistory(t);
+        save("basecamp_transactions", transactions);
+        renderTransaksi();
+      });
+    });
   });
   transaksiEl.querySelectorAll(".extend-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{ openExtendDrawer(btn.dataset.id); });
@@ -1818,6 +1919,70 @@ document.getElementById("saveDendaBtn").addEventListener("click", ()=>{
     save("basecamp_transactions", transactions);
   }
   closeDendaDrawer();
+  renderTransaksi();
+});
+
+// ================= CATAT PEMBAYARAN (mendukung cicil/bertahap) =================
+// t.payment.paidAmount & t.payment.status selalu dihitung ulang dari total t.paymentHistory,
+// jadi pelanggan bisa bayar beberapa kali (DP, cicilan, pelunasan) dan semuanya tercatat rapi.
+function recomputePaymentFromHistory(t){
+  const paid = (t.paymentHistory||[]).reduce((s,h)=>s+h.amount, 0);
+  t.payment.paidAmount = paid;
+  t.payment.status = paid<=0 ? "hutang" : (paid>=t.total ? "lunas" : "sebagian");
+}
+
+const bayarOverlay = document.getElementById("bayarOverlay");
+const bayarDrawer = document.getElementById("bayarDrawer");
+const bayarInfo = document.getElementById("bayarInfo");
+const bayarAmountInput = document.getElementById("bayarAmount");
+const bayarNoteInput = document.getElementById("bayarNote");
+const bayarError = document.getElementById("bayarError");
+let bayarTargetTxnId = null;
+let bayarMethod = "cash";
+
+function openBayarDrawer(txnId){
+  const t = transactions.find(x=>x.id===txnId);
+  if(!t) return;
+  bayarTargetTxnId = txnId;
+  bayarMethod = "cash";
+  bayarAmountInput.value = "";
+  bayarNoteInput.value = "";
+  bayarError.textContent = "";
+  bayarDrawer.querySelectorAll("[data-bm]").forEach(b=>b.classList.toggle("active", b.dataset.bm==="cash"));
+  const sisa = Math.max(0, t.total - (t.payment.paidAmount||0));
+  bayarInfo.innerHTML = `Total sewa: <b>${fmt(t.total)}</b><br>Sudah dibayar: <b>${fmt(t.payment.paidAmount||0)}</b><br>Sisa tagihan: <b>${fmt(sisa)}</b>`;
+  bayarOverlay.classList.add("open"); bayarDrawer.classList.add("open");
+  setTimeout(()=>bayarAmountInput.focus(), 200);
+}
+function closeBayarDrawer(){ bayarOverlay.classList.remove("open"); bayarDrawer.classList.remove("open"); bayarTargetTxnId = null; }
+document.getElementById("closeBayarDrawer").addEventListener("click", closeBayarDrawer);
+bayarOverlay.addEventListener("click", closeBayarDrawer);
+bayarDrawer.querySelectorAll("[data-bm]").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    bayarMethod = btn.dataset.bm;
+    bayarDrawer.querySelectorAll("[data-bm]").forEach(b=>b.classList.toggle("active", b===btn));
+  });
+});
+document.getElementById("saveBayarBtn").addEventListener("click", ()=>{
+  const amount = parseInt(bayarAmountInput.value);
+  if(!amount || amount<=0){
+    bayarError.textContent = "Nominal pembayaran wajib diisi (lebih dari 0).";
+    return;
+  }
+  const t = transactions.find(x=>x.id===bayarTargetTxnId);
+  if(t){
+    if(!t.paymentHistory) t.paymentHistory = [];
+    // kalau ada nominal terbayar sebelumnya yang belum tercatat di riwayat (misal dari checkout awal atau diset manual lewat dropdown status), selamatkan dulu jadi 1 entri
+    const alreadyLogged = t.paymentHistory.reduce((s,h)=>s+h.amount, 0);
+    const unlogged = (t.payment.paidAmount||0) - alreadyLogged;
+    if(unlogged>0){
+      t.paymentHistory.push({ id: uid(), amount: unlogged, method: t.payment.method||"cash", note: "Pembayaran sebelumnya", at: t.createdAt||new Date().toISOString() });
+    }
+    t.paymentHistory.push({ id: uid(), amount, method: bayarMethod, note: bayarNoteInput.value.trim(), at: new Date().toISOString() });
+    recomputePaymentFromHistory(t);
+    save("basecamp_transactions", transactions);
+  }
+  closeBayarDrawer();
   renderTransaksi();
 });
 
