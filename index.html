@@ -183,6 +183,15 @@
   .badge-booking{background:rgba(210,169,79,0.2); color:var(--amber-bright);}
   .badge-diaktifkan{background:rgba(63,167,90,0.18); color:#7fd899;}
   .badge-batal{background:rgba(168,54,42,0.2); color:#e0897d;}
+  .badge-jaminan-tahan{background:rgba(168,54,42,0.22); color:#e0897d;}
+  .badge-jaminan-ok{background:rgba(63,167,90,0.18); color:#7fd899;}
+  .denda-row{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; margin:4px 0; border-radius:8px; background:rgba(168,54,42,0.08); border:1px solid rgba(168,54,42,0.3);}
+  .denda-row.paid{background:rgba(63,167,90,0.08); border-color:rgba(63,167,90,0.3);}
+  .denda-row .dr-info{min-width:0; flex:1;}
+  .denda-row .dr-reason{font-size:12.5px; font-weight:600;}
+  .denda-row .dr-amount{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--canvas-dim);}
+  .denda-row .dr-actions{display:flex; gap:6px; flex:none;}
+  .denda-row .dr-actions button{padding:5px 9px; border-radius:7px; border:1px solid var(--line); background:transparent; color:var(--canvas); font-family:'IBM Plex Mono'; font-size:10.5px; cursor:pointer;}
   .badges{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;}
   .txn-dates{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--canvas-dim); margin:10px 0 4px;}
   .txn-items{font-size:12.5px; color:var(--canvas-dim); margin:6px 0 10px; line-height:1.7;}
@@ -347,6 +356,22 @@
   </div>
 </div>
 
+<div class="overlay" id="dendaOverlay"></div>
+<div class="drawer" id="dendaDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-head"><h2>Tambah Denda</h2><button id="closeDendaDrawer">TUTUP ✕</button></div>
+  <div class="drawer-body">
+    <div class="section-label">Alasan Denda</div>
+    <input class="field" id="dendaReason" placeholder="Contoh: Denda telat kembali 2 hari / Tenda rusak / Kompor hilang">
+    <div class="section-label">Nominal Denda (Rp)</div>
+    <input class="field" type="number" min="0" id="dendaAmount" placeholder="Contoh: 50000">
+    <div id="dendaError" style="color:#e0897d; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
+  </div>
+  <div class="drawer-foot">
+    <button class="save-btn" id="saveDendaBtn">Simpan Denda</button>
+  </div>
+</div>
+
 <script>
 // ================= MODAL KONFIRMASI KUSTOM =================
 // Pengganti window.confirm(), karena confirm() bawaan browser tidak muncul saat
@@ -357,6 +382,7 @@ const confirmMsg = document.getElementById("confirmMsg");
 const confirmOkBtn = document.getElementById("confirmOkBtn");
 const confirmCancelBtn = document.getElementById("confirmCancelBtn");
 let pendingConfirmAction = null;
+
 
 function showConfirm(message, onConfirm){
   confirmMsg.textContent = message;
@@ -519,6 +545,12 @@ const CATALOG = [
 
 const fmt = n => "Rp " + n.toLocaleString("id-ID");
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+// Debounce: tunda eksekusi sampai user berhenti mengetik sejenak, biar pencarian di data besar
+// (ribuan pelanggan) tidak bikin keyboard/ketikan terasa berat di tiap huruf.
+function debounce(fn, delay){
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(()=>fn(...args), delay); };
+}
 const fmtDate = iso => { const d=new Date(iso+"T00:00:00"); return d.toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}); };
 const DAY_NAMES = ["Minggu","Senin","Selasa","Rabu","Kamis","Jumat","Sabtu"];
 const fmtDateFull = iso => { const d=new Date(iso+"T00:00:00"); return `${DAY_NAMES[d.getDay()]}, ${fmtDate(iso)}`; };
@@ -572,6 +604,7 @@ let draft = freshDraft();
 let editPrevCart = null, editPrevDraft = null; // backup so editing can be cancelled without losing an in-progress new sale
 
 let activeCat = "Semua", query = "", activeTab = "katalog", txnFilter = "Semua", bookingFilter = "Semua";
+let txnQuery = "", txnDateMode = "semua", txnDateStart = todayISO(), txnDateEnd = todayISO(); // pencarian & filter periode transaksi
 
 // ---- laporan (report) state ----
 let lapPeriodType = "harian"; // 'harian' | 'bulanan' | 'tahunan' | 'custom'
@@ -942,10 +975,17 @@ function renderCheckout(){
       custHtml += `<input class="field" id="custSearch" placeholder="Cari nama / nomor HP…" value="${draft.custQuery||''}">`;
       if(customers.length===0){
         custHtml += `<div class="empty" style="padding:20px">Belum ada data pelanggan.</div>`;
+      } else if(!draft.custQuery && customers.length>50){
+        custHtml += `<div class="empty" style="padding:16px">Ketik nama atau nomor HP untuk mencari (${customers.length} pelanggan tersimpan).</div>`;
       } else {
-        custHtml += `<div class="cust-list">${filteredCust.map(c=>`
+        const CUST_SEARCH_LIMIT = 100;
+        const shownCust = filteredCust.slice(0, CUST_SEARCH_LIMIT);
+        custHtml += `<div class="cust-list">${shownCust.map(c=>`
           <div class="cust-row" data-id="${c.id}"><div><div class="cn">${c.name}</div><div class="cp">${c.phone}</div></div><span>›</span></div>
         `).join("") || `<div class="empty" style="padding:16px">Tidak ditemukan.</div>`}</div>`;
+        if(filteredCust.length > CUST_SEARCH_LIMIT){
+          custHtml += `<div class="date-summary">+${filteredCust.length-CUST_SEARCH_LIMIT} hasil lain, persempit pencarian untuk melihatnya.</div>`;
+        }
       }
     } else {
       custHtml += `
@@ -1070,7 +1110,7 @@ function renderCheckout(){
     btn.addEventListener("click", ()=>{ draft.customerMode = btn.dataset.mode; renderCheckout(); });
   });
   const custSearch = document.getElementById("custSearch");
-  if(custSearch) custSearch.addEventListener("input", (e)=>{ draft.custQuery = e.target.value; renderCheckout(); });
+  if(custSearch) custSearch.addEventListener("input", debounce((e)=>{ draft.custQuery = e.target.value; renderCheckout(); }, 200));
   checkoutBody.querySelectorAll(".cust-row").forEach(row=>{
     row.addEventListener("click", ()=>{
       draft.selectedCustomer = customers.find(c=>c.id===row.dataset.id);
@@ -1238,6 +1278,8 @@ saveBtn.addEventListener("click", ()=>{
       payment: { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0), method: draft.paymentMethod },
       total: grandTotal,
       status: "aktif",
+      dendaList: [],
+      jaminanReturned: false,
       fromBookingId: b ? b.id : null,
       createdAt: new Date().toISOString()
     };
@@ -1305,6 +1347,8 @@ saveBtn.addEventListener("click", ()=>{
     payment: { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0), method: draft.paymentMethod },
     total: grandTotal,
     status: "aktif",
+    dendaList: [],
+    jaminanReturned: false,
     createdAt: new Date().toISOString()
   };
   transactions.unshift(txn);
@@ -1316,21 +1360,80 @@ saveBtn.addEventListener("click", ()=>{
 const transaksiEl = document.getElementById("transaksiView");
 function renderTransaksi(){
   document.getElementById("itemCountStat").textContent = transactions.length + " TRANSAKSI";
-  const filters = ["Semua","Aktif","Selesai","Terhapus"];
-  let list = transactions;
-  if(txnFilter==="Aktif") list = transactions.filter(t=>t.status==="aktif");
-  if(txnFilter==="Selesai") list = transactions.filter(t=>t.status==="selesai");
+  const filters = ["Semua","Aktif","Selesai","Jaminan Ditahan","Terhapus"];
   const isDeletedView = txnFilter==="Terhapus";
-  if(isDeletedView) list = deletedTransactions;
+  let list = isDeletedView ? deletedTransactions : transactions;
+  if(txnFilter==="Aktif") list = list.filter(t=>t.status==="aktif");
+  if(txnFilter==="Selesai") list = list.filter(t=>t.status==="selesai");
+  if(txnFilter==="Jaminan Ditahan") list = list.filter(t=>t.jaminan && t.jaminan.type!=='none' && !t.jaminanReturned);
 
-  let html = `<div class="chips" style="margin-top:0">${filters.map(f=>`<button class="chip ${txnFilter===f?'active':''}" data-f="${f}">${f.toUpperCase()}${f==='Terhapus' && deletedTransactions.length>0 ? ' ('+deletedTransactions.length+')' : ''}</button>`).join("")}</div>`;
+  // pencarian: nama/no. HP pelanggan, atau nama barang
+  if(txnQuery.trim()){
+    const q = txnQuery.trim().toLowerCase();
+    list = list.filter(t=>
+      t.customer.name.toLowerCase().includes(q) ||
+      t.customer.phone.includes(q) ||
+      t.items.some(i=>i.name.toLowerCase().includes(q))
+    );
+  }
+
+  // filter periode, berdasarkan tanggal mulai sewa — bisa digabung dengan pencarian & status di atas
+  if(txnDateMode==="hari_ini"){
+    const today = todayISO();
+    list = list.filter(t=> txnLocalDate(t)===today);
+  } else if(txnDateMode==="custom" && txnDateStart && txnDateEnd){
+    const start = txnDateStart<=txnDateEnd ? txnDateStart : txnDateEnd;
+    const end = txnDateStart<=txnDateEnd ? txnDateEnd : txnDateStart;
+    list = list.filter(t=>{ const d = txnLocalDate(t); return d>=start && d<=end; });
+  }
+
+  const active = document.activeElement;
+  const restoreFocus = active && active.id==="txnSearchInput";
+  const restoreStart = restoreFocus ? active.selectionStart : null;
+  const restoreEnd = restoreFocus ? active.selectionEnd : null;
+
+  let html = `
+    <div class="searchbar"><input id="txnSearchInput" type="text" placeholder="Cari nama pelanggan, no. HP, atau nama barang…" value="${txnQuery}"></div>
+    <div class="dur-chips" style="margin-top:10px">
+      <button class="dur-chip ${txnDateMode==='semua'?'active':''}" data-tdm="semua">Semua Tanggal</button>
+      <button class="dur-chip ${txnDateMode==='hari_ini'?'active':''}" data-tdm="hari_ini">Hari Ini</button>
+      <button class="dur-chip ${txnDateMode==='custom'?'active':''}" data-tdm="custom">Custom</button>
+    </div>
+    ${txnDateMode==="custom" ? `
+      <div class="field-row" style="margin-top:8px">
+        <input class="field" type="date" id="txnDateStartInput" value="${txnDateStart}">
+        <input class="field" type="date" id="txnDateEndInput" value="${txnDateEnd}">
+      </div>
+    ` : ""}
+    <div class="chips" style="margin-top:10px">${filters.map(f=>`<button class="chip ${txnFilter===f?'active':''}" data-f="${f}">${f.toUpperCase()}${f==='Terhapus' && deletedTransactions.length>0 ? ' ('+deletedTransactions.length+')' : ''}</button>`).join("")}</div>
+  `;
 
   if(list.length===0){
-    html += `<div class="empty">${isDeletedView ? 'Belum ada transaksi yang dihapus.' : 'Belum ada transaksi'+(txnFilter!=='Semua' ? ' dengan status ini.' : '.')}</div>`;
+    const noMatchReason = (txnQuery.trim() || txnDateMode!=="semua") ? "Tidak ada transaksi yang cocok dengan pencarian/filter ini." : (isDeletedView ? "Belum ada transaksi yang dihapus." : "Belum ada transaksi"+(txnFilter!=='Semua' ? " dengan status ini." : "."));
+    html += `<div class="empty">${noMatchReason}</div>`;
   } else {
     html += list.map(t=>{
       const itemsStr = t.items.map(i=>`${i.name} ×${i.qty}`).join(", ");
       const sisa = t.total - (t.payment.paidAmount||0);
+      const dendaList = t.dendaList || [];
+      const dendaUnpaidTotal = dendaList.filter(d=>!d.paid).reduce((s,d)=>s+d.amount,0);
+      const jaminanHeld = t.jaminan && t.jaminan.type!=='none' && !t.jaminanReturned;
+      const dendaHtml = dendaList.length>0 ? `
+        <div class="section-label" style="margin:14px 0 6px">Denda</div>
+        ${dendaList.map(d=>`
+          <div class="denda-row ${d.paid?'paid':''}">
+            <div class="dr-info">
+              <div class="dr-reason">${d.reason}</div>
+              <div class="dr-amount">${fmt(d.amount)} · ${d.paid?'Lunas':'Belum lunas'}</div>
+            </div>
+            ${!isDeletedView ? `
+            <div class="dr-actions">
+              <button class="toggle-denda-paid" data-txn="${t.id}" data-denda="${d.id}">${d.paid?'Batal Lunas':'Tandai Lunas'}</button>
+              <button class="del-denda" data-txn="${t.id}" data-denda="${d.id}">Hapus</button>
+            </div>` : ""}
+          </div>
+        `).join("")}
+      ` : "";
       return `
       <div class="txn-card" data-id="${t.id}">
         <div class="txn-top">
@@ -1339,6 +1442,7 @@ function renderTransaksi(){
             ${isDeletedView ? `<span class="badge badge-selesai">DIHAPUS</span>` : `<span class="badge badge-${t.status}">${t.status==='aktif'?'AKTIF':'SELESAI'}</span>`}
             <span class="badge badge-${t.payment.status}">${t.payment.status==='hutang'?'BELUM BAYAR':t.payment.status==='sebagian'?'SEBAGIAN':'LUNAS'}</span>
             <span class="badge badge-method">${methodLabel(t.payment.method)}</span>
+            ${t.jaminan && t.jaminan.type!=='none' ? (jaminanHeld ? `<span class="badge badge-jaminan-tahan">🪪 JAMINAN DITAHAN</span>` : `<span class="badge badge-jaminan-ok">🪪 JAMINAN KEMBALI</span>`) : ""}
           </div>
         </div>
         <div class="txn-dates">${fmtDateFull(t.startDate)} → ${fmtDateFull(t.endDate)} · ${t.durationDays} hari · toleransi s.d. 20:00 WITA</div>
@@ -1346,6 +1450,8 @@ function renderTransaksi(){
         <div class="txn-items">${itemsStr}</div>
         ${t.discount && t.discount.amount>0 ? `<div class="txn-items" style="margin-top:-6px">Subtotal ${fmt(t.subtotal)} · Diskon −${fmt(t.discount.amount)}</div>` : ''}
         <div class="txn-total">${fmt(t.total)}${t.payment.status==='sebagian' ? ` <span style="font-size:12px; color:var(--canvas-dim); font-family:'IBM Plex Mono'">(sisa ${fmt(sisa)})</span>` : ''}</div>
+        ${dendaUnpaidTotal>0 ? `<div class="txn-dates" style="color:#e0897d">Total denda belum lunas: <b>${fmt(dendaUnpaidTotal)}</b></div>` : ""}
+        ${dendaHtml}
         ${isDeletedView ? `
         <div class="txn-dates">Dihapus: ${t.deletedAt ? fmtDateFull(localDateFromISO(t.deletedAt)) : '-'}</div>
         <div class="txn-actions">
@@ -1355,6 +1461,8 @@ function renderTransaksi(){
         <div class="txn-actions">
           <button class="edit-btn" data-id="${t.id}">✎ Edit</button>
           <button class="toggle-status" data-id="${t.id}">${t.status==='aktif' ? 'Tandai Selesai' : 'Aktifkan Lagi'}</button>
+          <button class="add-denda-btn" data-id="${t.id}">+ Denda</button>
+          ${t.jaminan && t.jaminan.type!=='none' ? `<button class="toggle-jaminan-btn" data-id="${t.id}">${jaminanHeld ? '✅ Kembalikan Jaminan' : '↩ Tandai Ditahan Lagi'}</button>` : ""}
           <select class="pay-select" data-id="${t.id}">
             <option value="hutang" ${t.payment.status==='hutang'?'selected':''}>Belum Bayar</option>
             <option value="sebagian" ${t.payment.status==='sebagian'?'selected':''}>Sebagian</option>
@@ -1373,6 +1481,20 @@ function renderTransaksi(){
     }).join("");
   }
   transaksiEl.innerHTML = html;
+
+  const txnSearchInput = document.getElementById("txnSearchInput");
+  txnSearchInput.addEventListener("input", debounce(e=>{ txnQuery = e.target.value; renderTransaksi(); }, 200));
+  if(restoreFocus){
+    txnSearchInput.focus();
+    if(restoreStart!=null){ try{ txnSearchInput.setSelectionRange(restoreStart, restoreEnd); }catch(e){} }
+  }
+  transaksiEl.querySelectorAll("[data-tdm]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ txnDateMode = btn.dataset.tdm; renderTransaksi(); });
+  });
+  const txnDateStartInput = document.getElementById("txnDateStartInput");
+  if(txnDateStartInput) txnDateStartInput.addEventListener("change", e=>{ txnDateStart = e.target.value || todayISO(); renderTransaksi(); });
+  const txnDateEndInput = document.getElementById("txnDateEndInput");
+  if(txnDateEndInput) txnDateEndInput.addEventListener("change", e=>{ txnDateEnd = e.target.value || todayISO(); renderTransaksi(); });
 
   transaksiEl.querySelectorAll("[data-f]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ txnFilter = btn.dataset.f; renderTransaksi(); });
@@ -1404,6 +1526,50 @@ function renderTransaksi(){
       t.payment.method = sel.value;
       save("basecamp_transactions", transactions);
       renderTransaksi();
+    });
+  });
+  transaksiEl.querySelectorAll(".add-denda-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ openDendaDrawer(btn.dataset.id); });
+  });
+  transaksiEl.querySelectorAll(".toggle-jaminan-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const t = transactions.find(x=>x.id===btn.dataset.id);
+      if(!t) return;
+      const held = !t.jaminanReturned;
+      const unpaid = (t.dendaList||[]).filter(d=>!d.paid).reduce((s,d)=>s+d.amount,0);
+      if(held && unpaid>0){
+        showConfirm(`Masih ada denda ${fmt(unpaid)} yang belum lunas. Tetap kembalikan jaminan?`, ()=>{
+          t.jaminanReturned = true;
+          save("basecamp_transactions", transactions);
+          renderTransaksi();
+        });
+      } else {
+        t.jaminanReturned = !t.jaminanReturned;
+        save("basecamp_transactions", transactions);
+        renderTransaksi();
+      }
+    });
+  });
+  transaksiEl.querySelectorAll(".toggle-denda-paid").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const t = transactions.find(x=>x.id===btn.dataset.txn);
+      if(!t) return;
+      const d = (t.dendaList||[]).find(x=>x.id===btn.dataset.denda);
+      if(!d) return;
+      d.paid = !d.paid;
+      save("basecamp_transactions", transactions);
+      renderTransaksi();
+    });
+  });
+  transaksiEl.querySelectorAll(".del-denda").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const t = transactions.find(x=>x.id===btn.dataset.txn);
+      if(!t) return;
+      showConfirm("Hapus catatan denda ini?", ()=>{
+        t.dendaList = (t.dendaList||[]).filter(x=>x.id!==btn.dataset.denda);
+        save("basecamp_transactions", transactions);
+        renderTransaksi();
+      });
     });
   });
   transaksiEl.querySelectorAll(".del-btn").forEach(btn=>{
@@ -1441,6 +1607,40 @@ function renderTransaksi(){
     });
   });
 }
+
+// ================= DENDA (FINE) DRAWER =================
+const dendaOverlay = document.getElementById("dendaOverlay");
+const dendaDrawer = document.getElementById("dendaDrawer");
+const dendaReasonInput = document.getElementById("dendaReason");
+const dendaAmountInput = document.getElementById("dendaAmount");
+const dendaError = document.getElementById("dendaError");
+let dendaTargetTxnId = null;
+
+function openDendaDrawer(txnId){
+  dendaTargetTxnId = txnId;
+  dendaReasonInput.value = ""; dendaAmountInput.value = ""; dendaError.textContent = "";
+  dendaOverlay.classList.add("open"); dendaDrawer.classList.add("open");
+  setTimeout(()=>dendaReasonInput.focus(), 200);
+}
+function closeDendaDrawer(){ dendaOverlay.classList.remove("open"); dendaDrawer.classList.remove("open"); dendaTargetTxnId = null; }
+document.getElementById("closeDendaDrawer").addEventListener("click", closeDendaDrawer);
+dendaOverlay.addEventListener("click", closeDendaDrawer);
+document.getElementById("saveDendaBtn").addEventListener("click", ()=>{
+  const reason = dendaReasonInput.value.trim();
+  const amount = parseInt(dendaAmountInput.value);
+  if(!reason || !amount || amount<=0){
+    dendaError.textContent = "Alasan dan nominal denda (lebih dari 0) wajib diisi.";
+    return;
+  }
+  const t = transactions.find(x=>x.id===dendaTargetTxnId);
+  if(t){
+    if(!t.dendaList) t.dendaList = [];
+    t.dendaList.push({ id: uid(), reason, amount, paid:false, createdAt: new Date().toISOString() });
+    save("basecamp_transactions", transactions);
+  }
+  closeDendaDrawer();
+  renderTransaksi();
+});
 
 function jaminanLabel(j){
   if(!j || j.type==="none") return "-";
@@ -1638,6 +1838,8 @@ function renderPelanggan(){
     c.name.toLowerCase().includes(pelangganQuery.toLowerCase()) ||
     c.phone.includes(pelangganQuery)
   );
+  const LIST_ROW_LIMIT = 300; // batasi render DOM biar tidak lag untuk data ribuan pelanggan
+  const shown = list.slice(0, LIST_ROW_LIMIT);
 
   let html = `
     <div class="searchbar"><input id="pelangganSearch" type="text" placeholder="Cari nama / nomor HP…" value="${pelangganQuery}"></div>
@@ -1649,7 +1851,10 @@ function renderPelanggan(){
   if(list.length===0){
     html += `<div class="empty">${customers.length===0 ? 'Belum ada data pelanggan. Tambahkan lewat checkout, atau impor banyak sekaligus.' : 'Tidak ditemukan.'}</div>`;
   } else {
-    html += `<div class="cust-list" style="max-height:none; border:none;">` + list.map(c => `
+    if(list.length > LIST_ROW_LIMIT){
+      html += `<div class="date-summary">Menampilkan ${LIST_ROW_LIMIT} dari ${list.length} pelanggan. Gunakan pencarian untuk mempersempit.</div>`;
+    }
+    html += `<div class="cust-list" style="max-height:none; border:none;">` + shown.map(c => `
       <div class="cust-row" style="cursor:default;">
         <div><div class="cn">${c.name}</div><div class="cp">${c.phone}</div></div>
         <button class="del-cust-btn" data-id="${c.id}" style="background:none; border:none; color:var(--brick); font-family:'IBM Plex Mono'; font-size:11px; cursor:pointer;">HAPUS</button>
@@ -1660,7 +1865,7 @@ function renderPelanggan(){
   pelangganEl.innerHTML = html;
 
   const searchInput = document.getElementById("pelangganSearch");
-  searchInput.addEventListener("input", e=>{ pelangganQuery = e.target.value; renderPelanggan(); });
+  searchInput.addEventListener("input", debounce(e=>{ pelangganQuery = e.target.value; renderPelanggan(); }, 200));
   if(restoreFocus){
     searchInput.focus();
     if(restoreStart!=null){ try{ searchInput.setSelectionRange(restoreStart, restoreEnd); }catch(e){} }
@@ -1744,29 +1949,34 @@ previewImportBtn.addEventListener("click", ()=>{
   const existingPhones = new Set(customers.map(c=>c.phone));
   const seenInBatch = new Set();
   const rows = [];
+  const PREVIEW_ROW_LIMIT = 300; // batasi render DOM biar iPad tidak lag untuk impor ribuan kontak
   importParsed = [];
   parsed.forEach(p=>{
-    let statusLabel, statusColor, willImport = false;
+    let statusLabel, statusColor;
     if(existingPhones.has(p.phone)){
       statusLabel = "SUDAH ADA"; statusColor = "var(--canvas-dim)";
     } else if(seenInBatch.has(p.phone)){
       statusLabel = "DUPLIKAT"; statusColor = "var(--canvas-dim)";
     } else {
       statusLabel = "BARU"; statusColor = "var(--amber-bright)";
-      willImport = true;
       seenInBatch.add(p.phone);
       importParsed.push(p);
     }
-    rows.push(`<div class="cust-row" style="cursor:default;">
-      <div><div class="cn">${p.name}</div><div class="cp">${p.phone}</div></div>
-      <span style="font-family:'IBM Plex Mono'; font-size:10px; color:${statusColor}">${statusLabel}</span>
-    </div>`);
+    if(rows.length < PREVIEW_ROW_LIMIT){
+      rows.push(`<div class="cust-row" style="cursor:default;">
+        <div><div class="cn">${p.name}</div><div class="cp">${p.phone}</div></div>
+        <span style="font-family:'IBM Plex Mono'; font-size:10px; color:${statusColor}">${statusLabel}</span>
+      </div>`);
+    }
   });
 
   importPreviewWrap.style.display = parsed.length ? "" : "none";
   importSummary.innerHTML = parsed.length
     ? `Ditemukan <b>${parsed.length}</b> baris · <b>${importParsed.length}</b> pelanggan baru siap diimpor · ${parsed.length-importParsed.length} dilewati (sudah ada/duplikat).`
     : `Tidak ada data yang terbaca. Pastikan formatnya "Nama, Nomor HP" per baris.`;
+  if(parsed.length > PREVIEW_ROW_LIMIT){
+    rows.push(`<div class="empty" style="padding:12px; font-size:11.5px;">…dan ${parsed.length-PREVIEW_ROW_LIMIT} baris lainnya tidak ditampilkan (biar ringan), tapi tetap ikut dihitung & diimpor.</div>`);
+  }
   importPreviewList.innerHTML = rows.join("") || `<div class="empty" style="padding:16px">-</div>`;
 
   confirmImportBtn.disabled = importParsed.length===0;
