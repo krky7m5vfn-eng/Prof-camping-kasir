@@ -54,6 +54,15 @@
   .searchbar input::placeholder{color:var(--canvas-dim); opacity:0.6;}
   .searchbar input:focus{border-color:var(--amber-bright); box-shadow:0 0 0 3px rgba(210,169,79,0.15);}
   .add-product-btn{padding:9px 16px; border-radius:999px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-family:'IBM Plex Mono'; font-size:12px; font-weight:600; letter-spacing:0.03em; cursor:pointer; white-space:nowrap;}
+  .add-item-toggle-btn{width:100%; padding:11px; margin-top:8px; border:1px dashed var(--amber); background:transparent; color:var(--amber-bright); border-radius:10px; font-family:'IBM Plex Mono'; font-size:12.5px; cursor:pointer;}
+  .add-item-picker{margin-top:10px; border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--pine);}
+  .add-item-list{max-height:220px; overflow-y:auto; margin-top:8px;}
+  .add-item-row{display:flex; align-items:center; gap:8px; padding:8px 4px; border-bottom:1px solid rgba(76,99,85,0.3);}
+  .add-item-row:last-child{border-bottom:none;}
+  .add-item-row .ai-name{flex:1; font-size:13px; min-width:0;}
+  .add-item-row .ai-price{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--canvas-dim); flex:none;}
+  .add-item-row .ai-add-btn{flex:none; width:28px; height:28px; border-radius:7px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-size:15px; cursor:pointer;}
+  .ai-close-btn{width:100%; margin-top:10px; padding:9px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--canvas-dim); font-family:'IBM Plex Mono'; font-size:11.5px; cursor:pointer;}
   .add-product-btn:active{background:var(--amber); color:var(--pine);}
 
   .chips{display:flex; gap:8px; overflow-x:auto; margin-top:12px; padding-bottom:14px; scrollbar-width:none;}
@@ -69,6 +78,7 @@
   .tag{position:relative; background:var(--pine-light); border:1px solid var(--line); border-radius:10px; padding:16px 14px 14px; display:flex; flex-direction:column; gap:10px; transition:transform .12s ease, border-color .12s ease;}
   .tag:active{transform:scale(0.98);}
   .tag::before{content:''; position:absolute; top:10px; left:10px; width:9px; height:9px; border-radius:50%; background:var(--pine); border:1px solid var(--line);}
+  .tag-img{width:100%; height:110px; object-fit:cover; border-radius:8px; margin-bottom:2px;}
   .tag-name{font-size:15.5px; font-weight:600; line-height:1.25; padding-left:18px; min-height:38px;}
   .tag-cat{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--canvas-dim); letter-spacing:0.06em; padding-left:18px;}
   .tag-bottom{display:flex; align-items:center; justify-content:space-between; margin-top:2px;}
@@ -136,6 +146,19 @@
   .cust-toggle button.active{background:var(--amber); border-color:var(--amber); color:var(--pine); font-weight:600;}
 
   .cust-list{max-height:180px; overflow-y:auto; border:1px solid var(--line); border-radius:10px; margin-bottom:10px;}
+
+  /* ---- Input Cepat: autocomplete ---- */
+  .autocomplete-wrap{position:relative; margin-bottom:12px;}
+  .autocomplete-list{display:none; position:relative; margin-top:-6px; border:1px solid var(--amber); border-top:none; border-radius:0 0 10px 10px; background:var(--pine); max-height:240px; overflow-y:auto; z-index:5;}
+  .autocomplete-list.open{display:block;}
+  .ac-row{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid rgba(76,99,85,0.35); cursor:pointer;}
+  .ac-row:last-child{border-bottom:none;}
+  .ac-row:active{background:rgba(210,169,79,0.1);}
+  .ac-row .ac-name{font-size:13.5px; flex:1; min-width:0;}
+  .ac-row .ac-phone{font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); flex:none;}
+  .ac-row .ac-price{font-family:'IBM Plex Mono'; font-size:12px; color:var(--amber-bright); flex:none;}
+  .ac-row.ac-empty{color:var(--canvas-dim); cursor:default; justify-content:center; font-family:'IBM Plex Mono'; font-size:12px;}
+  .qi-new-cust-fields{margin-top:8px;}
   .cust-row{padding:10px 14px; border-bottom:1px solid rgba(76,99,85,0.35); cursor:pointer; display:flex; justify-content:space-between; align-items:center;}
   .cust-row:last-child{border-bottom:none;}
   .cust-row:hover, .cust-row:active{background:rgba(210,169,79,0.08);}
@@ -270,6 +293,7 @@
   </div>
   <div class="tabs">
     <button class="tab active" data-tab="katalog">KATALOG</button>
+    <button class="tab" data-tab="quick">INPUT CEPAT</button>
     <button class="tab" data-tab="booking">BOOKING</button>
     <button class="tab" data-tab="transaksi">TRANSAKSI</button>
     <button class="tab" data-tab="pelanggan">PELANGGAN</button>
@@ -285,6 +309,7 @@
 </header>
 
 <main id="katalogView"></main>
+<main id="quickInputView" style="display:none"></main>
 <main id="bookingView" style="display:none"></main>
 <main id="transaksiView" style="display:none"></main>
 <main id="pelangganView" style="display:none"></main>
@@ -315,6 +340,13 @@
     <input class="field" id="newProdCat" placeholder="Atau ketik kategori baru">
     <div class="section-label">Harga Sewa per Hari (Rp)</div>
     <input class="field" type="number" min="0" id="newProdPrice" placeholder="Contoh: 25000">
+    <div class="section-label">Foto Produk (opsional)</div>
+    <input class="field" type="file" accept="image/*" id="newProdImageInput">
+    <div id="newProdImagePreviewWrap" style="display:none; margin-top:8px; align-items:center; gap:10px;">
+      <img id="newProdImagePreview" style="width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--line);">
+      <button type="button" id="removeProdImageBtn" style="background:none; border:1px solid var(--brick); color:var(--brick); border-radius:8px; padding:6px 10px; font-family:'IBM Plex Mono'; font-size:11px; cursor:pointer;">Hapus Foto</button>
+    </div>
+    <div id="newProdImageStatus" style="font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); margin-top:6px;"></div>
     <div id="newProdError" style="color:#e0897d; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
   </div>
   <div class="drawer-foot">
@@ -369,6 +401,21 @@
   </div>
   <div class="drawer-foot">
     <button class="save-btn" id="saveDendaBtn">Simpan Denda</button>
+  </div>
+</div>
+
+<div class="overlay" id="extendOverlay"></div>
+<div class="drawer" id="extendDrawer">
+  <div class="drawer-handle"></div>
+  <div class="drawer-head"><h2>Perpanjang Sewa</h2><button id="closeExtendDrawer">TUTUP ✕</button></div>
+  <div class="drawer-body">
+    <div class="date-summary" id="extendInfo"></div>
+    <div class="section-label">Tambah Berapa Hari?</div>
+    <input class="field" type="number" min="1" id="extendDaysInput" value="1">
+    <div class="date-summary" id="extendPreview"></div>
+  </div>
+  <div class="drawer-foot">
+    <button class="save-btn" id="confirmExtendBtn">Simpan Perpanjangan</button>
   </div>
 </div>
 
@@ -573,6 +620,7 @@ let deletedTransactions = load("basecamp_deleted_transactions", []); // riwayat 
 let bookings = load("basecamp_bookings", []);         // [{id,customer,items,durationDays,startDate,endDate,dp,paymentMethod,total,status:'booking'|'diaktifkan'|'batal',linkedTxnId,createdAt}]
 let customProducts = load("basecamp_custom_products", []); // manually-added products: [{id,name,cat,price,unit}]
 let productOverrides = load("basecamp_product_overrides", {}); // built-in product edits: id -> {name,cat,price}
+let productImages = load("basecamp_product_images", {}); // id -> foto produk (base64 dataURL, sudah dikompres kecil). Disimpan sebagai dokumen Firestore TERPISAH per produk (bukan digabung 1 dokumen) supaya tidak kena limit ukuran 1MB per dokumen.
 let cart = load("basecamp_cart_v2", {});               // id -> qty
 
 // apply any saved edits to the built-in catalog items (built-in items are const but their fields aren't frozen)
@@ -597,7 +645,8 @@ function freshDraft(){
     discount: { type:"none", value:0 }, // 'none' | 'nominal' | 'persen'
     jaminan: { type:"none", note:"" }, // 'none' | 'ktp' | 'sim' | 'lain'
     paymentMethod: "cash", // 'cash' | 'qris' | 'transfer'
-    payment: { status:"hutang", paidAmount:0 }
+    payment: { status:"hutang", paidAmount:0 },
+    showAddItemPicker: false, addItemQuery: "" // panel "+ Tambah Barang Lain" di dalam drawer checkout/edit
   };
 }
 let draft = freshDraft();
@@ -605,6 +654,7 @@ let editPrevCart = null, editPrevDraft = null; // backup so editing can be cance
 
 let activeCat = "Semua", query = "", activeTab = "katalog", txnFilter = "Semua", bookingFilter = "Semua";
 let txnQuery = "", txnDateMode = "semua", txnDateStart = todayISO(), txnDateEnd = todayISO(); // pencarian & filter periode transaksi
+let quickSelectedCustomer = null; // pelanggan yang dipilih lewat autocomplete di tab Input Cepat
 
 // ---- laporan (report) state ----
 let lapPeriodType = "harian"; // 'harian' | 'bulanan' | 'tahunan' | 'custom'
@@ -625,17 +675,20 @@ document.querySelectorAll(".tab").forEach(btn=>{
     document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active", b===btn));
     document.getElementById("katalogFilters").style.display = activeTab==="katalog" ? "" : "none";
     document.getElementById("katalogView").style.display = activeTab==="katalog" ? "" : "none";
+    document.getElementById("quickInputView").style.display = activeTab==="quick" ? "" : "none";
     document.getElementById("bookingView").style.display = activeTab==="booking" ? "" : "none";
     document.getElementById("transaksiView").style.display = activeTab==="transaksi" ? "" : "none";
     document.getElementById("pelangganView").style.display = activeTab==="pelanggan" ? "" : "none";
     document.getElementById("laporanView").style.display = activeTab==="laporan" ? "" : "none";
     document.getElementById("itemCountStat").textContent =
       activeTab==="katalog" ? (allProducts().length+" ITEM") :
+      activeTab==="quick" ? "" :
       activeTab==="booking" ? (bookings.filter(b=>b.status==="booking").length+" MENUNGGU") :
       activeTab==="pelanggan" ? (customers.length+" PELANGGAN") :
       activeTab==="laporan" ? "" :
       (transactions.length+" TRANSAKSI");
     if(activeTab==="transaksi") renderTransaksi();
+    if(activeTab==="quick") renderQuickInput();
     if(activeTab==="booking") renderBooking();
     if(activeTab==="pelanggan") renderPelanggan();
     if(activeTab==="laporan") renderLaporan();
@@ -725,6 +778,81 @@ function renderProdCatChips(){
 }
 newProdCat.addEventListener("input", renderProdCatChips);
 
+// ================= FOTO PRODUK (kompresi + simpan per-produk terpisah) =================
+// Mengecilkan foto ke maks ~360px sisi terpanjang & JPEG kualitas ~0.62 sebelum disimpan,
+// supaya ukurannya kecil (biasanya puluhan KB) dan tidak mendekati limit 1MB per dokumen Firestore.
+function compressImageFile(file, maxDim=360, quality=0.62){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      const img = new Image();
+      img.onload = ()=>{
+        let w = img.width, h = img.height;
+        if(w>h){ if(w>maxDim){ h = Math.round(h*maxDim/w); w = maxDim; } }
+        else { if(h>maxDim){ w = Math.round(w*maxDim/h); h = maxDim; } }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = ()=>reject(new Error("Gagal membaca gambar."));
+      img.src = e.target.result;
+    };
+    reader.onerror = ()=>reject(new Error("Gagal membaca file."));
+    reader.readAsDataURL(file);
+  });
+}
+function saveProductImage(productId, dataUrl){
+  productImages[productId] = dataUrl;
+  try{ localStorage.setItem("basecamp_product_images", JSON.stringify(productImages)); }catch(e){}
+  if(firebaseEnabled){
+    db.collection("product_images").doc(productId).set({ data: dataUrl, updatedAt: Date.now() })
+      .catch(err=>console.error("Gagal mengunggah foto produk:", err));
+  }
+}
+function deleteProductImage(productId){
+  delete productImages[productId];
+  try{ localStorage.setItem("basecamp_product_images", JSON.stringify(productImages)); }catch(e){}
+  if(firebaseEnabled){
+    db.collection("product_images").doc(productId).delete().catch(err=>console.error("Gagal menghapus foto produk:", err));
+  }
+}
+
+let pendingProductImage = undefined; // undefined = tidak diubah, null = eksplisit dihapus, string = foto baru (base64)
+const newProdImageInput = document.getElementById("newProdImageInput");
+const newProdImagePreviewWrap = document.getElementById("newProdImagePreviewWrap");
+const newProdImagePreview = document.getElementById("newProdImagePreview");
+const newProdImageStatus = document.getElementById("newProdImageStatus");
+const removeProdImageBtn = document.getElementById("removeProdImageBtn");
+
+function showProdImagePreview(dataUrl){
+  if(dataUrl){
+    newProdImagePreview.src = dataUrl;
+    newProdImagePreviewWrap.style.display = "flex";
+  } else {
+    newProdImagePreviewWrap.style.display = "none";
+  }
+}
+newProdImageInput.addEventListener("change", async e=>{
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  newProdImageStatus.textContent = "Memproses foto…";
+  try{
+    const compressed = await compressImageFile(file);
+    pendingProductImage = compressed;
+    showProdImagePreview(compressed);
+    newProdImageStatus.textContent = "Foto siap, akan tersimpan saat kamu tekan Simpan.";
+  }catch(err){
+    newProdImageStatus.textContent = "Gagal memproses foto, coba foto lain.";
+  }
+});
+removeProdImageBtn.addEventListener("click", ()=>{
+  pendingProductImage = null;
+  newProdImageInput.value = "";
+  showProdImagePreview(null);
+  newProdImageStatus.textContent = "Foto akan dihapus saat kamu tekan Simpan.";
+});
+
 function openProductDrawer(product){
   editingProductId = product ? product.id : null;
   productDrawerTitle.textContent = product ? "Edit Produk" : "Tambah Produk";
@@ -733,6 +861,10 @@ function openProductDrawer(product){
   newProdCat.value = product ? product.cat : "";
   newProdPrice.value = product ? product.price : "";
   newProdError.textContent = "";
+  newProdImageInput.value = "";
+  newProdImageStatus.textContent = "";
+  pendingProductImage = undefined;
+  showProdImagePreview(product ? productImages[product.id] : null);
   renderProdCatChips();
   productOverlay.classList.add("open"); productDrawer.classList.add("open");
   setTimeout(()=>newProdName.focus(), 200);
@@ -765,10 +897,13 @@ saveProductBtn.addEventListener("click", ()=>{
         save("basecamp_product_overrides", productOverrides);
       }
     }
+    if(pendingProductImage===null) deleteProductImage(editingProductId);
+    else if(typeof pendingProductImage==="string") saveProductImage(editingProductId, pendingProductImage);
   } else {
     const product = { id: "c"+uid(), name, cat, price, unit: "Hari" };
     customProducts.push(product);
     save("basecamp_custom_products", customProducts);
+    if(typeof pendingProductImage==="string") saveProductImage(product.id, pendingProductImage);
   }
 
   closeProductDrawer();
@@ -777,11 +912,13 @@ saveProductBtn.addEventListener("click", ()=>{
 function cardHtml(p){
   const inCart = !!cart[p.id];
   const isCustom = p.id.startsWith("c");
+  const img = productImages[p.id];
   return `<div class="tag ${inCart?'in-cart':''}">
     <div class="tag-card-actions">
       <button class="edit-product-btn" data-editid="${p.id}" aria-label="Edit produk">✎</button>
       ${isCustom ? `<button class="del-product-btn" data-delid="${p.id}" aria-label="Hapus produk">✕</button>` : ""}
     </div>
+    ${img ? `<img src="${img}" class="tag-img" alt="${p.name}" loading="lazy" decoding="async">` : ""}
     <div class="tag-name">${p.name}${isCustom ? `<span class="custom-badge">MANUAL</span>` : ""}</div>
     <div class="tag-cat">${p.cat}</div>
     <div class="tag-bottom">
@@ -953,6 +1090,28 @@ function renderCheckout(){
       <button class="remove" data-id="${e.product.id}">HAPUS</button>
     </div>`).join("") || `<div class="empty">Keranjang kosong.</div>`;
 
+  const cartIds = new Set(entries.map(e=>e.product.id));
+  const addItemQuery = (draft.addItemQuery||"").toLowerCase();
+  const addItemResults = allProducts()
+    .filter(p=>p.name.toLowerCase().includes(addItemQuery))
+    .sort((a,b)=>a.name.localeCompare(b.name,"id",{sensitivity:"base"}))
+    .slice(0,50);
+  const addItemPickerHtml = draft.showAddItemPicker ? `
+    <div class="add-item-picker">
+      <input class="field" id="addItemSearch" placeholder="Cari barang untuk ditambahkan…" value="${draft.addItemQuery||''}">
+      <div class="add-item-list">
+        ${addItemResults.map(p=>`
+          <div class="add-item-row">
+            <div class="ai-name">${p.name}${cartIds.has(p.id) ? ` <span style="color:var(--amber-bright)">(×${cart[p.id]})</span>` : ""}</div>
+            <div class="ai-price">${fmt(p.price)}</div>
+            <button class="ai-add-btn" data-id="${p.id}">+</button>
+          </div>
+        `).join("") || `<div class="empty" style="padding:14px">Tidak ditemukan.</div>`}
+      </div>
+      <button class="ai-close-btn" id="closeAddItemPicker">Selesai Tambah Barang</button>
+    </div>
+  ` : `<button type="button" class="add-item-toggle-btn" id="openAddItemPicker">+ Tambah Barang Lain</button>`;
+
   // customer picker
   const filteredCust = customers.filter(c => !draft.custQuery || c.name.toLowerCase().includes(draft.custQuery.toLowerCase()) || c.phone.includes(draft.custQuery||""));
   let custHtml = "";
@@ -1014,6 +1173,7 @@ function renderCheckout(){
     ${modeToggleHtml}
     <div class="section-label">Item Sewa</div>
     ${itemsHtml}
+    ${addItemPickerHtml}
 
     <div class="section-label">Pelanggan</div>
     ${custHtml}
@@ -1099,6 +1259,20 @@ function renderCheckout(){
   checkoutBody.querySelectorAll(".remove").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       delete cart[btn.dataset.id];
+      save("basecamp_cart_v2", cart);
+      renderCheckout(); renderCatalog(); renderCartFab();
+    });
+  });
+  const openAddItemPickerBtn = document.getElementById("openAddItemPicker");
+  if(openAddItemPickerBtn) openAddItemPickerBtn.addEventListener("click", ()=>{ draft.showAddItemPicker = true; renderCheckout(); });
+  const closeAddItemPickerBtn = document.getElementById("closeAddItemPicker");
+  if(closeAddItemPickerBtn) closeAddItemPickerBtn.addEventListener("click", ()=>{ draft.showAddItemPicker = false; draft.addItemQuery = ""; renderCheckout(); });
+  const addItemSearchEl = document.getElementById("addItemSearch");
+  if(addItemSearchEl) addItemSearchEl.addEventListener("input", e=>{ draft.addItemQuery = e.target.value; renderCheckout(); });
+  checkoutBody.querySelectorAll(".ai-add-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const id = btn.dataset.id;
+      cart[id] = (cart[id]||0) + 1;
       save("basecamp_cart_v2", cart);
       renderCheckout(); renderCatalog(); renderCartFab();
     });
@@ -1450,6 +1624,7 @@ function renderTransaksi(){
         <div class="txn-items">${itemsStr}</div>
         ${t.discount && t.discount.amount>0 ? `<div class="txn-items" style="margin-top:-6px">Subtotal ${fmt(t.subtotal)} · Diskon −${fmt(t.discount.amount)}</div>` : ''}
         <div class="txn-total">${fmt(t.total)}${t.payment.status==='sebagian' ? ` <span style="font-size:12px; color:var(--canvas-dim); font-family:'IBM Plex Mono'">(sisa ${fmt(sisa)})</span>` : ''}</div>
+        ${t.extensions && t.extensions.length>0 ? `<div class="txn-dates">Diperpanjang ${t.extensions.length}× (total +${t.extensions.reduce((s,e)=>s+e.days,0)} hari)</div>` : ""}
         ${dendaUnpaidTotal>0 ? `<div class="txn-dates" style="color:#e0897d">Total denda belum lunas: <b>${fmt(dendaUnpaidTotal)}</b></div>` : ""}
         ${dendaHtml}
         ${isDeletedView ? `
@@ -1460,6 +1635,7 @@ function renderTransaksi(){
         ` : `
         <div class="txn-actions">
           <button class="edit-btn" data-id="${t.id}">✎ Edit</button>
+          ${t.status==='aktif' ? `<button class="extend-btn" data-id="${t.id}">⏱ Perpanjang</button>` : ""}
           <button class="toggle-status" data-id="${t.id}">${t.status==='aktif' ? 'Tandai Selesai' : 'Aktifkan Lagi'}</button>
           <button class="add-denda-btn" data-id="${t.id}">+ Denda</button>
           ${t.jaminan && t.jaminan.type!=='none' ? `<button class="toggle-jaminan-btn" data-id="${t.id}">${jaminanHeld ? '✅ Kembalikan Jaminan' : '↩ Tandai Ditahan Lagi'}</button>` : ""}
@@ -1530,6 +1706,9 @@ function renderTransaksi(){
   });
   transaksiEl.querySelectorAll(".add-denda-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{ openDendaDrawer(btn.dataset.id); });
+  });
+  transaksiEl.querySelectorAll(".extend-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ openExtendDrawer(btn.dataset.id); });
   });
   transaksiEl.querySelectorAll(".toggle-jaminan-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
@@ -1639,6 +1818,61 @@ document.getElementById("saveDendaBtn").addEventListener("click", ()=>{
     save("basecamp_transactions", transactions);
   }
   closeDendaDrawer();
+  renderTransaksi();
+});
+
+// ================= PERPANJANG SEWA =================
+const extendOverlay = document.getElementById("extendOverlay");
+const extendDrawer = document.getElementById("extendDrawer");
+const extendDaysInput = document.getElementById("extendDaysInput");
+const extendInfo = document.getElementById("extendInfo");
+const extendPreview = document.getElementById("extendPreview");
+let extendTargetTxnId = null;
+
+function updateExtendPreview(){
+  const t = transactions.find(x=>x.id===extendTargetTxnId);
+  if(!t) return;
+  const days = parseInt(extendDaysInput.value) || 0;
+  const unitPricePerDay = t.subtotal / t.durationDays;
+  const extraCost = Math.round(unitPricePerDay * days);
+  const newDuration = t.durationDays + days;
+  const newEndDate = addDays(t.startDate, newDuration);
+  extendInfo.innerHTML = `Sewa saat ini: <b>${t.durationDays} hari</b>, selesai <b>${fmtDateFull(t.endDate)}</b>`;
+  extendPreview.innerHTML = days>0
+    ? `Jadi <b>${newDuration} hari</b>, selesai baru: <b>${fmtDateFull(newEndDate)}</b><br>Tambahan biaya: <b>${fmt(extraCost)}</b>`
+    : "";
+}
+function openExtendDrawer(txnId){
+  const t = transactions.find(x=>x.id===txnId);
+  if(!t) return;
+  extendTargetTxnId = txnId;
+  extendDaysInput.value = 1;
+  updateExtendPreview();
+  extendOverlay.classList.add("open"); extendDrawer.classList.add("open");
+}
+function closeExtendDrawer(){ extendOverlay.classList.remove("open"); extendDrawer.classList.remove("open"); extendTargetTxnId = null; }
+document.getElementById("closeExtendDrawer").addEventListener("click", closeExtendDrawer);
+extendOverlay.addEventListener("click", closeExtendDrawer);
+extendDaysInput.addEventListener("input", updateExtendPreview);
+document.getElementById("confirmExtendBtn").addEventListener("click", ()=>{
+  const t = transactions.find(x=>x.id===extendTargetTxnId);
+  if(!t) return;
+  const days = parseInt(extendDaysInput.value);
+  if(!days || days<=0) return;
+  const unitPricePerDay = t.subtotal / t.durationDays;
+  const extraCost = Math.round(unitPricePerDay * days);
+  t.durationDays += days;
+  t.endDate = addDays(t.startDate, t.durationDays);
+  t.subtotal += extraCost;
+  if(t.discount && t.discount.type==="persen"){
+    t.discount.amount = Math.round(t.subtotal * Math.min(t.discount.value||0,100) / 100);
+  }
+  t.total = Math.max(0, t.subtotal - (t.discount ? t.discount.amount : 0));
+  if(!t.extensions) t.extensions = [];
+  t.extensions.push({ days, extraCost, at: new Date().toISOString() });
+  t.updatedAt = new Date().toISOString();
+  save("basecamp_transactions", transactions);
+  closeExtendDrawer();
   renderTransaksi();
 });
 
@@ -1995,6 +2229,127 @@ confirmImportBtn.addEventListener("click", ()=>{
   importSummary.innerHTML = `✓ Berhasil mengimpor ${count} pelanggan baru.`;
 });
 
+// ================= INPUT CEPAT (autocomplete, ramah HP layar kecil) =================
+const quickInputEl = document.getElementById("quickInputView");
+
+function renderQuickInput(){
+  const entries = cartEntries();
+  const custInputValue = quickSelectedCustomer ? quickSelectedCustomer.name : "";
+
+  quickInputEl.innerHTML = `
+    <div class="report-title" style="margin-top:6px">⚡ Input Cepat</div>
+    <div class="date-summary">Ketik nama barang & pelanggan, tinggal pilih dari saran. Lebih cepat dibanding scroll katalog — cocok dipakai di HP layar kecil. Sewa langsung atau Booking DP bisa dipilih di langkah berikutnya.</div>
+
+    <div class="section-label">Cari & Tambah Barang</div>
+    <div class="autocomplete-wrap">
+      <input class="field" id="qiItemInput" placeholder="Ketik nama barang… misal: tenda" autocomplete="off">
+      <div class="autocomplete-list" id="qiItemSuggestions"></div>
+    </div>
+    <div id="qiItemList">
+      ${entries.length ? entries.map(e=>`
+        <div class="cart-item">
+          <div class="info"><div class="n">${e.product.name}</div><div class="p">${fmt(e.product.price)} × ${e.qty} unit</div></div>
+          <div class="stepper" data-id="${e.product.id}"><button data-op="-">−</button><span class="val">${e.qty}</span><button data-op="+">+</button></div>
+          <button class="remove" data-id="${e.product.id}">HAPUS</button>
+        </div>`).join("")
+      : `<div class="empty" style="padding:16px 4px">Belum ada barang dipilih.</div>`}
+    </div>
+
+    <div class="section-label" style="margin-top:20px">Pelanggan</div>
+    <div class="autocomplete-wrap">
+      <input class="field" id="qiCustInput" placeholder="Ketik nama pelanggan…" autocomplete="off" value="${custInputValue}" ${quickSelectedCustomer ? "readonly" : ""}>
+      <div class="autocomplete-list" id="qiCustSuggestions"></div>
+    </div>
+    ${quickSelectedCustomer ? `
+      <div class="selected-cust"><div><div class="cn">${quickSelectedCustomer.name}</div><div class="cp">${quickSelectedCustomer.phone}</div></div><button id="qiChangeCust">GANTI</button></div>
+    ` : `<div class="date-summary">Belum ketemu namanya? Tidak apa — lanjut saja, nanti bisa isi nama & no. HP baru di langkah berikutnya.</div>`}
+
+    <button class="save-btn" id="qiContinueBtn" style="margin-top:18px" ${entries.length===0?"disabled":""}>Lanjut ke Detail & Simpan →</button>
+  `;
+
+  // ---- autocomplete barang ----
+  const qiItemInput = document.getElementById("qiItemInput");
+  const qiItemSuggestions = document.getElementById("qiItemSuggestions");
+  qiItemInput.addEventListener("input", ()=>{
+    const q = qiItemInput.value.trim().toLowerCase();
+    if(!q){ qiItemSuggestions.innerHTML = ""; qiItemSuggestions.classList.remove("open"); return; }
+    const results = allProducts()
+      .filter(p=>p.name.toLowerCase().includes(q))
+      .sort((a,b)=>a.name.localeCompare(b.name,"id",{sensitivity:"base"}))
+      .slice(0,8);
+    qiItemSuggestions.innerHTML = results.length ? results.map(p=>`
+      <div class="ac-row" data-id="${p.id}"><span class="ac-name">${p.name}</span><span class="ac-price">${fmt(p.price)}</span></div>
+    `).join("") : `<div class="ac-row ac-empty">Barang tidak ditemukan</div>`;
+    qiItemSuggestions.classList.add("open");
+    qiItemSuggestions.querySelectorAll("[data-id]").forEach(row=>{
+      row.addEventListener("click", ()=>{
+        const id = row.dataset.id;
+        cart[id] = (cart[id]||0) + 1;
+        save("basecamp_cart_v2", cart);
+        qiItemInput.value = ""; qiItemSuggestions.innerHTML = ""; qiItemSuggestions.classList.remove("open");
+        renderQuickInput(); renderCartFab();
+        document.getElementById("qiItemInput").focus();
+      });
+    });
+  });
+  qiItemInput.addEventListener("blur", ()=>{ setTimeout(()=>qiItemSuggestions.classList.remove("open"), 150); });
+
+  document.querySelectorAll("#qiItemList .stepper").forEach(st=>{
+    st.querySelectorAll("button").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = st.dataset.id, op = btn.dataset.op;
+        cart[id] = Math.max(1, (cart[id]||1) + (op==="+"?1:-1));
+        save("basecamp_cart_v2", cart);
+        renderQuickInput(); renderCartFab();
+      });
+    });
+  });
+  document.querySelectorAll("#qiItemList .remove").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      delete cart[btn.dataset.id];
+      save("basecamp_cart_v2", cart);
+      renderQuickInput(); renderCartFab();
+    });
+  });
+
+  // ---- autocomplete pelanggan ----
+  const qiCustInput = document.getElementById("qiCustInput");
+  const qiCustSuggestions = document.getElementById("qiCustSuggestions");
+  qiCustInput.addEventListener("input", ()=>{
+    const q = qiCustInput.value.trim().toLowerCase();
+    if(!q){ qiCustSuggestions.innerHTML = ""; qiCustSuggestions.classList.remove("open"); return; }
+    const results = customers.filter(c=>c.name.toLowerCase().includes(q) || c.phone.includes(q)).slice(0,8);
+    qiCustSuggestions.innerHTML = results.length ? results.map(c=>`
+      <div class="ac-row" data-id="${c.id}"><span class="ac-name">${c.name}</span><span class="ac-phone">${c.phone}</span></div>
+    `).join("") : `<div class="ac-row ac-empty">Pelanggan tidak ditemukan</div>`;
+    qiCustSuggestions.classList.add("open");
+    qiCustSuggestions.querySelectorAll("[data-id]").forEach(row=>{
+      row.addEventListener("click", ()=>{
+        quickSelectedCustomer = customers.find(c=>c.id===row.dataset.id) || null;
+        renderQuickInput();
+      });
+    });
+  });
+  qiCustInput.addEventListener("blur", ()=>{ setTimeout(()=>qiCustSuggestions.classList.remove("open"), 150); });
+  const qiChangeCust = document.getElementById("qiChangeCust");
+  if(qiChangeCust) qiChangeCust.addEventListener("click", ()=>{ quickSelectedCustomer = null; renderQuickInput(); });
+
+  // ---- lanjut ke drawer checkout yang sudah ada (Sewa Langsung / Booking DP bisa dipilih di situ) ----
+  const qiContinueBtn = document.getElementById("qiContinueBtn");
+  if(qiContinueBtn) qiContinueBtn.addEventListener("click", ()=>{
+    if(cartEntries().length===0) return;
+    if(quickSelectedCustomer){
+      draft.selectedCustomer = quickSelectedCustomer;
+      draft.customerMode = "search";
+    } else {
+      const typedName = qiCustInput.value.trim();
+      if(typedName){ draft.customerMode = "new"; draft.newName = typedName; }
+    }
+    quickSelectedCustomer = null; // sudah dipindahkan ke draft, reset state tab ini
+    openDrawer();
+  });
+}
+
 const laporanEl = document.getElementById("laporanView");
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -2214,6 +2569,7 @@ renderCartFab();
 // ================= SINKRONISASI REALTIME (FIREBASE) =================
 function rerenderCurrentTab(){
   if(activeTab==="katalog"){ renderChips(); renderCatalog(); }
+  else if(activeTab==="quick"){ renderQuickInput(); }
   else if(activeTab==="booking"){ renderBooking(); }
   else if(activeTab==="transaksi"){ renderTransaksi(); }
   else if(activeTab==="pelanggan"){ renderPelanggan(); }
@@ -2241,6 +2597,17 @@ if(firebaseEnabled){
     productOverrides = v;
     CATALOG.forEach(p=>{ if(productOverrides[p.id]) Object.assign(p, productOverrides[p.id]); });
   });
+
+  // Foto produk disimpan di koleksi TERPISAH (1 dokumen per produk), bukan digabung seperti data di atas,
+  // supaya ukuran tiap dokumen tetap kecil dan tidak gampang kena limit 1MB Firestore.
+  db.collection("product_images").onSnapshot(snap=>{
+    snap.docChanges().forEach(change=>{
+      if(change.type==="removed") delete productImages[change.doc.id];
+      else productImages[change.doc.id] = change.doc.data().data;
+    });
+    try{ localStorage.setItem("basecamp_product_images", JSON.stringify(productImages)); }catch(e){}
+    rerenderCurrentTab();
+  }, err=>console.error("Gagal sinkron foto produk:", err));
 
   // dorong data lokal yang sudah ada (kalau ada) ke Firebase saat pertama kali tersambung,
   // supaya data yang sudah dicatat sebelum online tidak hilang begitu saja
