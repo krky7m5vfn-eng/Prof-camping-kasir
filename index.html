@@ -22,6 +22,7 @@
     --pine:#14261F; --pine-light:#1E362B; --canvas:#EFE7D3; --canvas-dim:#D8CDB2;
     --amber:#B08D3D; --amber-bright:#D2A94F; --brick:#A8362A; --line:#4C6355;
     --ok:#3FA75A; --warn:#C9A227; --debt:#A8362A;
+    --chart-blue:#6FA8C9; --chart-rose:#C97FBE; --chart-teal:#4FB8A6;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0; background:var(--pine); overscroll-behavior-y:none;}
@@ -236,6 +237,37 @@
   .stat-box .sb-value{font-family:'Big Shoulders Display'; font-weight:800; font-size:19px; color:var(--amber-bright); word-break:break-word;}
   .stat-box.debt .sb-value{color:#e0897d;}
   .stat-box.ok .sb-value{color:#7fd899;}
+
+  /* ===== DASHBOARD ===== */
+  .kpi-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin:14px 0 22px;}
+  .kpi-card{border-radius:14px; padding:16px 16px 14px; border:1px solid var(--line); background:var(--pine-light); position:relative; overflow:hidden;}
+  .kpi-card::after{content:''; position:absolute; right:-18px; top:-18px; width:70px; height:70px; border-radius:50%; background:rgba(255,255,255,0.05);}
+  .kpi-card.amber{background:linear-gradient(135deg, var(--amber) 0%, #8a6b28 100%); border-color:transparent;}
+  .kpi-card.debt{background:linear-gradient(135deg, var(--brick) 0%, #7a2620 100%); border-color:transparent;}
+  .kpi-card.ok{background:linear-gradient(135deg, var(--ok) 0%, #276b3b 100%); border-color:transparent;}
+  .kpi-label{font-family:'IBM Plex Mono'; font-size:10.5px; letter-spacing:0.07em; text-transform:uppercase; opacity:0.85; margin-bottom:8px;}
+  .kpi-card.amber .kpi-label, .kpi-card.debt .kpi-label, .kpi-card.ok .kpi-label{color:rgba(255,255,255,0.85);}
+  .kpi-card:not(.amber):not(.debt):not(.ok) .kpi-label{color:var(--canvas-dim);}
+  .kpi-value{font-family:'Big Shoulders Display'; font-weight:800; font-size:24px; line-height:1; word-break:break-word;}
+  .kpi-card.amber .kpi-value, .kpi-card.debt .kpi-value, .kpi-card.ok .kpi-value{color:#fff;}
+  .kpi-card:not(.amber):not(.debt):not(.ok) .kpi-value{color:var(--amber-bright);}
+
+  .chart-row{display:grid; grid-template-columns:repeat(auto-fit, minmax(230px,1fr)); gap:14px; margin:14px 0 6px;}
+  .chart-card{background:var(--pine-light); border:1px solid var(--line); border-radius:12px; padding:16px;}
+  .chart-title{font-family:'IBM Plex Mono'; font-size:11px; letter-spacing:0.06em; text-transform:uppercase; color:var(--canvas-dim); margin-bottom:12px;}
+  .donut-wrap{display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
+  .legend{flex:1; min-width:110px; display:flex; flex-direction:column; gap:7px;}
+  .legend-row{display:flex; align-items:center; gap:7px; font-size:12px;}
+  .legend-dot{width:9px; height:9px; border-radius:50%; flex:none;}
+  .legend-label{color:var(--canvas); flex:1; min-width:0;}
+  .legend-val{font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); white-space:nowrap;}
+  .chart-subtitle{font-size:11.5px; color:var(--canvas-dim); margin-top:-8px; margin-bottom:12px;}
+  .donut-center-wrap{position:relative; display:inline-flex; flex:none;}
+  .donut-center{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none;}
+  .dc-label{font-family:'IBM Plex Mono'; font-size:9px; letter-spacing:0.08em; color:var(--canvas-dim); text-transform:uppercase;}
+  .dc-value{font-family:'Big Shoulders Display'; font-weight:800; font-size:20px; color:var(--canvas); margin-top:2px;}
+  .cat-highlight{margin-top:14px; padding-top:12px; border-top:1px dashed var(--line); font-size:12px; color:var(--canvas-dim); line-height:1.4;}
+  .cat-highlight b{color:var(--amber-bright);}
   .bar-row{display:flex; align-items:center; gap:8px; margin:6px 0; font-family:'IBM Plex Mono'; font-size:11px;}
   .bar-row .bl{width:58px; flex:none; color:var(--canvas-dim); text-align:right;}
   .bar-row .bt{flex:1; background:rgba(255,255,255,0.06); border-radius:6px; height:18px; position:relative; overflow:hidden;}
@@ -298,6 +330,7 @@
     <button class="tab" data-tab="transaksi">TRANSAKSI</button>
     <button class="tab" data-tab="pelanggan">PELANGGAN</button>
     <button class="tab" data-tab="laporan">LAPORAN</button>
+    <button class="tab" data-tab="dashboard">DASHBOARD</button>
   </div>
   <div id="katalogFilters">
     <div class="searchbar"><input id="searchInput" type="text" inputmode="search" placeholder="Cari alat… misal: tenda, kompor, lampu"></div>
@@ -314,6 +347,7 @@
 <main id="transaksiView" style="display:none"></main>
 <main id="pelangganView" style="display:none"></main>
 <main id="laporanView" style="display:none"></main>
+<main id="dashboardView" style="display:none"></main>
 
 <button class="cart-fab" id="cartFab" hidden><span>Checkout</span><span class="count" id="cartCount">0</span></button>
 
@@ -733,6 +767,11 @@ let rekapPeriodType = "harian"; // 'harian' | 'bulanan'
 let rekapDate = todayISO();
 let rekapMonth = todayISO().slice(0,7);
 
+let dashPeriodType = "bulanan"; // 'harian' | 'bulanan' | 'tahunan'
+let dashDate = todayISO();
+let dashMonth = todayISO().slice(0,7);
+let dashYear = todayISO().slice(0,4);
+
 // ================= TABS =================
 document.querySelectorAll(".tab").forEach(btn=>{
   btn.addEventListener("click", ()=>{
@@ -745,18 +784,21 @@ document.querySelectorAll(".tab").forEach(btn=>{
     document.getElementById("transaksiView").style.display = activeTab==="transaksi" ? "" : "none";
     document.getElementById("pelangganView").style.display = activeTab==="pelanggan" ? "" : "none";
     document.getElementById("laporanView").style.display = activeTab==="laporan" ? "" : "none";
+    document.getElementById("dashboardView").style.display = activeTab==="dashboard" ? "" : "none";
     document.getElementById("itemCountStat").textContent =
       activeTab==="katalog" ? (allProducts().length+" ITEM") :
       activeTab==="quick" ? "" :
       activeTab==="booking" ? (bookings.filter(b=>b.status==="booking").length+" MENUNGGU") :
       activeTab==="pelanggan" ? (customers.length+" PELANGGAN") :
       activeTab==="laporan" ? "" :
+      activeTab==="dashboard" ? "" :
       (transactions.length+" TRANSAKSI");
     if(activeTab==="transaksi") renderTransaksi();
     if(activeTab==="quick") renderQuickInput();
     if(activeTab==="booking") renderBooking();
     if(activeTab==="pelanggan") renderPelanggan();
     if(activeTab==="laporan") renderLaporan();
+    if(activeTab==="dashboard") renderDashboard();
   });
 });
 
@@ -2516,6 +2558,7 @@ function renderQuickInput(){
 }
 
 const laporanEl = document.getElementById("laporanView");
+const dashboardEl = document.getElementById("dashboardView");
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
 // Convert a stored UTC instant (createdAt, e.g. "2026-08-01T09:00:00.000Z") into the admin's local calendar date.
@@ -2723,6 +2766,178 @@ function renderLaporan(){
   renderRekapProduk();
 }
 
+// ================= DASHBOARD =================
+function getDashboardRange(){
+  if(dashPeriodType==="harian") return { start: dashDate, end: dashDate };
+  if(dashPeriodType==="tahunan") return { start: `${dashYear}-01-01`, end: `${dashYear}-12-31` };
+  const [y,m] = dashMonth.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return { start: `${dashMonth}-01`, end: `${dashMonth}-${String(lastDay).padStart(2,"0")}` };
+}
+function dashboardPeriodLabel(range){
+  if(dashPeriodType==="harian") return fmtDate(range.start);
+  if(dashPeriodType==="tahunan") return `Tahun ${dashYear}`;
+  return `${MONTH_NAMES[parseInt(dashMonth.slice(5,7),10)-1]} ${dashMonth.slice(0,4)}`;
+}
+
+function renderDonutWithLegend(segments, isCurrency){
+  const total = segments.reduce((s,x)=>s+x.value, 0);
+  if(total<=0) return `<div class="empty" style="padding:20px 0">Belum ada data.</div>`;
+  const r = 42, circ = 2*Math.PI*r;
+  let offset = 0;
+  const circles = segments.filter(s=>s.value>0).map(seg=>{
+    const dash = (seg.value/total)*circ;
+    const el = `<circle cx="60" cy="60" r="${r}" fill="none" stroke="${seg.color}" stroke-width="16" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 60 60)"/>`;
+    offset += dash;
+    return el;
+  }).join("");
+  const legend = segments.filter(s=>s.value>0).map(seg=>{
+    const pct = Math.round((seg.value/total)*100);
+    return `<div class="legend-row"><span class="legend-dot" style="background:${seg.color}"></span><span class="legend-label">${seg.label}</span><span class="legend-val">${isCurrency ? fmt(seg.value) : seg.value+"×"} · ${pct}%</span></div>`;
+  }).join("");
+  return `<div class="donut-wrap"><svg viewBox="0 0 120 120" width="120" height="120">${circles}</svg><div class="legend">${legend}</div></div>`;
+}
+
+function computeCategoryDistribution(list){
+  const lookup = {};
+  allProducts().forEach(p=>{ lookup[p.name] = p.cat; });
+  const map = {};
+  list.forEach(t=>{
+    t.items.forEach(i=>{
+      const cat = lookup[i.name] || "Lainnya";
+      map[cat] = (map[cat]||0) + i.qty;
+    });
+  });
+  let entries = Object.entries(map).map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value);
+  const total = entries.reduce((s,e)=>s+e.value, 0);
+  const colors = ["#6D4FEC","#9B8CF5","#5EC8E0","#4FC98A","var(--amber-bright)"];
+  if(entries.length>5){
+    const top4 = entries.slice(0,4);
+    const restSum = entries.slice(4).reduce((s,e)=>s+e.value,0);
+    entries = restSum>0 ? [...top4, {label:"Lainnya", value:restSum}] : top4;
+  }
+  entries.forEach((e,i)=>{ e.color = colors[i%colors.length]; e.pct = total>0 ? Math.round((e.value/total)*100) : 0; });
+  return { entries, total };
+}
+
+function renderCategoryCard(list){
+  const { entries, total } = computeCategoryDistribution(list);
+  if(total===0){
+    return `<div class="chart-card">
+      <div class="chart-title">Kategori Terlaris</div>
+      <div class="chart-subtitle">Distribusi penyewaan berdasarkan kategori</div>
+      <div class="empty" style="padding:20px 0">Belum ada data.</div>
+    </div>`;
+  }
+  const r=42, circ=2*Math.PI*r, gap=4;
+  let offset=0;
+  const circles = entries.map(e=>{
+    const raw = (e.value/total)*circ;
+    const dash = Math.max(raw-gap, 1);
+    const el = `<circle cx="60" cy="60" r="${r}" fill="none" stroke="${e.color}" stroke-width="16" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 60 60)"/>`;
+    offset += raw;
+    return el;
+  }).join("");
+  const legend = entries.map(e=>`
+    <div class="legend-row"><span class="legend-dot" style="background:${e.color}"></span><span class="legend-label">${e.label}</span><span class="legend-val">${e.pct}%</span></div>`).join("");
+  const top = entries[0];
+  return `<div class="chart-card">
+    <div class="chart-title">Kategori Terlaris</div>
+    <div class="chart-subtitle">Distribusi penyewaan berdasarkan kategori</div>
+    <div class="donut-wrap">
+      <div class="donut-center-wrap">
+        <svg viewBox="0 0 120 120" width="120" height="120">${circles}</svg>
+        <div class="donut-center"><div class="dc-label">Total</div><div class="dc-value">100%</div></div>
+      </div>
+      <div class="legend">${legend}</div>
+    </div>
+    <div class="cat-highlight">🔥 <b>${top.label}</b> mendominasi ${top.pct}% sewa periode ini</div>
+  </div>`;
+}
+
+function renderDashboard(){
+  const range = getDashboardRange();
+  const periodList = transactions.filter(t=>{ const d = txnLocalDate(t); return d>=range.start && d<=range.end; });
+  const sum = computeRevenueSummary(periodList);
+  const aktifCount = transactions.filter(t=>t.status==="aktif").length;
+
+  const payLabels = { lunas:"Lunas", sebagian:"Sebagian", hutang:"Belum Bayar" };
+  const payColors = { lunas:"var(--ok)", sebagian:"var(--warn)", hutang:"var(--debt)" };
+  const payMap = {};
+  periodList.forEach(t=>{ const s=t.payment.status; payMap[s]=(payMap[s]||0)+1; });
+  const paySegments = Object.keys(payMap).map(k=>({ label: payLabels[k]||k, value: payMap[k], color: payColors[k]||"var(--amber-bright)" }));
+
+  const methodColors = ["var(--amber-bright)","var(--chart-blue)","var(--chart-teal)","var(--chart-rose)","var(--brick)"];
+  const methodMap = {};
+  periodList.forEach(t=>{ const m=(t.payment.method||"lainnya"); methodMap[m]=(methodMap[m]||0)+t.total; });
+  const methodSegments = Object.keys(methodMap).map((k,i)=>({ label: k.charAt(0).toUpperCase()+k.slice(1), value: methodMap[k], color: methodColors[i%methodColors.length] }));
+
+  const end14 = todayISO(), start14 = addDays(end14, -13);
+  const trendRows = breakdownByDay(start14, end14, transactions);
+
+  const recap = computeProductRecap(periodList).slice(0,5);
+  const recapHtml = recap.length===0 ? `<div class="empty">Belum ada data pada periode ini.</div>` : recap.map((r,idx)=>`
+    <div class="prod-row">
+      <div style="display:flex; align-items:center; flex:1; min-width:0;">
+        <span class="prod-rank">${idx+1}</span>
+        <div style="min-width:0;">
+          <div class="pn">${r.name}</div>
+          <div class="pmeta">${r.txnCount} transaksi · ${fmt(r.revenue)}</div>
+        </div>
+      </div>
+      <div class="pq">${r.qty} unit</div>
+    </div>`).join("");
+
+  const periodHtml = [["harian","Harian"],["bulanan","Bulanan"],["tahunan","Tahunan"]]
+    .map(([k,l])=>`<button class="dur-chip ${dashPeriodType===k?'active':''}" data-dashmode="${k}">${l}</button>`).join("");
+  let pickerHtml = "";
+  if(dashPeriodType==="harian") pickerHtml = `<input class="field" type="date" id="dashDateInput" value="${dashDate}">`;
+  else if(dashPeriodType==="tahunan") pickerHtml = `<input class="field" type="number" id="dashYearInput" value="${dashYear}" min="2000" max="2100" style="max-width:140px">`;
+  else pickerHtml = `<input class="field" type="month" id="dashMonthInput" value="${dashMonth}">`;
+
+  dashboardEl.innerHTML = `
+    <div class="report-section">
+      <div class="report-title">📊 Dashboard — ${dashboardPeriodLabel(range)}</div>
+      <div class="dur-chips">${periodHtml}</div>
+      ${pickerHtml}
+
+      <div class="kpi-grid" style="margin-top:16px">
+        <div class="kpi-card amber"><div class="kpi-label">Pemasukan Diterima</div><div class="kpi-value">${fmt(sum.totalDiterima)}</div></div>
+        <div class="kpi-card debt"><div class="kpi-label">Piutang</div><div class="kpi-value">${fmt(sum.piutang)}</div></div>
+        <div class="kpi-card ok"><div class="kpi-label">Sewa Aktif</div><div class="kpi-value">${aktifCount}</div></div>
+        <div class="kpi-card"><div class="kpi-label">Transaksi Periode Ini</div><div class="kpi-value">${sum.count}</div></div>
+      </div>
+
+      <div class="chart-row">
+        <div class="chart-card">
+          <div class="chart-title">Status Pembayaran</div>
+          ${renderDonutWithLegend(paySegments)}
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Metode Bayar (nilai)</div>
+          ${renderDonutWithLegend(methodSegments, true)}
+        </div>
+        ${renderCategoryCard(periodList)}
+      </div>
+
+      <div class="section-label">Tren Pemasukan 14 Hari Terakhir</div>
+      ${renderBarRows(trendRows)}
+
+      <div class="section-label">Produk Terlaris Periode Ini</div>
+      ${recapHtml}
+    </div>`;
+
+  document.querySelectorAll("#dashboardView [data-dashmode]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ dashPeriodType = btn.dataset.dashmode; renderDashboard(); });
+  });
+  const dashDateInput = document.getElementById("dashDateInput");
+  if(dashDateInput) dashDateInput.addEventListener("change", e=>{ dashDate = e.target.value || todayISO(); renderDashboard(); });
+  const dashMonthInput = document.getElementById("dashMonthInput");
+  if(dashMonthInput) dashMonthInput.addEventListener("change", e=>{ dashMonth = e.target.value || todayISO().slice(0,7); renderDashboard(); });
+  const dashYearInput = document.getElementById("dashYearInput");
+  if(dashYearInput) dashYearInput.addEventListener("change", e=>{ dashYear = e.target.value || todayISO().slice(0,4); renderDashboard(); });
+}
+
 // ================= SEARCH =================
 document.getElementById("searchInput").addEventListener("input", (e)=>{ query = e.target.value; renderCatalog(); });
 
@@ -2739,6 +2954,7 @@ function rerenderCurrentTab(){
   else if(activeTab==="transaksi"){ renderTransaksi(); }
   else if(activeTab==="pelanggan"){ renderPelanggan(); }
   else if(activeTab==="laporan"){ renderLaporan(); }
+  else if(activeTab==="dashboard"){ renderDashboard(); }
   renderCartFab();
 }
 
