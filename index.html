@@ -513,7 +513,7 @@ const FIRESTORE_SYNCED_KEYS = [
 // ================= KONEKSI KE GOOGLE SHEETS (rekap transaksi otomatis) =================
 // Isi dengan URL "Web app" hasil deploy Google Apps Script (lihat panduan setup dari Claude).
 // Selama masih "GANTI_DENGAN_URL_APPS_SCRIPT", fitur ini otomatis nonaktif dan tidak memengaruhi aplikasi sama sekali.
-const GOOGLE_SHEETS_URL = "GANTI_DENGAN_URL_APPS_SCRIPT";
+const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbxygMPcwZryH_gp_HOL7KRhqx2wMS3tVWECRecZYUdZsU7fl0aiaB4S8unVz80dLkxd/exec";
 const googleSheetsEnabled = GOOGLE_SHEETS_URL && !GOOGLE_SHEETS_URL.startsWith("GANTI_");
 
 function syncTransactionsToSheet(list){
