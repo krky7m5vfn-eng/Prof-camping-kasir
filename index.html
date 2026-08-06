@@ -72,7 +72,7 @@
   .chip.active{background:var(--amber); border-color:var(--amber); color:var(--pine); font-weight:600;}
   .chip:focus-visible{outline:2px solid var(--amber-bright); outline-offset:2px;}
 
-  main{padding:20px; max-width:1100px; margin:0 auto 120px;}
+  main{padding:20px; max-width:1100px; margin:0 auto 90px;}
   .group-title{font-size:14px; font-family:'IBM Plex Mono',monospace; letter-spacing:0.12em; color:var(--amber-bright); margin:26px 0 12px; padding-bottom:6px; border-bottom:1px dashed var(--line);}
   .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:14px;}
 
@@ -96,7 +96,7 @@
 
   .empty{text-align:center; color:var(--canvas-dim); padding:60px 20px; font-family:'IBM Plex Mono',monospace; font-size:13px;}
 
-  .cart-fab{position:fixed; right:20px; bottom:calc(20px + env(safe-area-inset-bottom)); z-index:30; background:var(--amber); color:var(--pine); border:none; border-radius:999px; padding:14px 20px; font-family:'Big Shoulders Display'; font-weight:800; font-size:16px; letter-spacing:0.03em; text-transform:uppercase; display:flex; align-items:center; gap:10px; box-shadow:0 6px 20px rgba(0,0,0,0.35); cursor:pointer;}
+  .cart-fab{position:fixed; right:20px; bottom:calc(78px + env(safe-area-inset-bottom)); z-index:30; background:var(--amber); color:var(--pine); border:none; border-radius:999px; padding:14px 20px; font-family:'Big Shoulders Display'; font-weight:800; font-size:16px; letter-spacing:0.03em; text-transform:uppercase; display:flex; align-items:center; gap:10px; box-shadow:0 6px 20px rgba(0,0,0,0.35); cursor:pointer;}
   .cart-fab .count{background:var(--pine); color:var(--amber-bright); border-radius:999px; min-width:22px; height:22px; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono'; font-size:12px; padding:0 6px;}
   .cart-fab[hidden]{display:none;}
 
@@ -293,6 +293,35 @@
   .login-card .login-btn:disabled{opacity:0.5;}
   .login-card .login-error{color:#e0897d; font-size:12.5px; font-family:'IBM Plex Mono'; margin-top:10px; min-height:16px;}
   .logout-btn{background:none; border:1px solid var(--line); color:var(--canvas-dim); font-family:'IBM Plex Mono'; font-size:10.5px; padding:5px 10px; border-radius:999px; cursor:pointer; margin-top:4px;}
+
+  /* ---- Bottom Nav ---- */
+  .bottom-nav{position:fixed; left:0; right:0; bottom:0; z-index:35; display:flex; align-items:flex-end;
+    background:var(--pine-light); border-top:1px solid var(--line); padding:8px 6px calc(8px + env(safe-area-inset-bottom));}
+  .bn-btn{flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; background:none; border:none; color:var(--canvas-dim); cursor:pointer; padding:4px 2px;}
+  .bn-icon{width:21px; height:21px;}
+  .bn-label{font-family:'IBM Plex Mono'; font-size:10px; letter-spacing:0.02em;}
+  .bn-btn.active{color:var(--amber-bright);}
+  .bn-add{flex:0.9;}
+  .bn-add-circle{width:46px; height:46px; margin-top:-26px; border-radius:50%; background:var(--amber); color:var(--pine); display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; line-height:1; box-shadow:0 6px 16px rgba(0,0,0,0.4); border:3px solid var(--pine);}
+
+  /* ---- Home (Dashboard utama) ---- */
+  .home-card{background:var(--pine-light); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:22px;}
+  .home-card-title{font-size:22px; font-weight:800; margin-bottom:16px;}
+  .home-stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px 14px;}
+  .home-stat-label{font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); letter-spacing:0.04em; margin-bottom:4px;}
+  .home-stat-value{font-family:'Big Shoulders Display'; font-size:24px; font-weight:800; color:var(--canvas);}
+  .menu-grid{display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;}
+  @media (max-width:420px){ .menu-grid{grid-template-columns:repeat(3, 1fr);} }
+  .menu-item{display:flex; flex-direction:column; align-items:center; gap:8px; background:var(--pine-light); border:1px solid var(--line); border-radius:12px; padding:14px 6px; cursor:pointer; color:var(--canvas);}
+  .menu-item:active{transform:scale(0.96); border-color:var(--amber-bright);}
+  .menu-item-icon{width:38px; height:38px; border-radius:10px; background:rgba(210,169,79,0.12); color:var(--amber-bright); display:flex; align-items:center; justify-content:center; font-size:19px;}
+  .menu-item-label{font-size:11.5px; text-align:center; line-height:1.25;}
+  .home-active-filters{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:22px 0 12px;}
+  .home-filter-pill{display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:8px 14px; background:transparent; color:var(--canvas); font-size:13px; cursor:pointer;}
+  .home-filter-pill .cnt{background:var(--warn); color:var(--pine); font-family:'IBM Plex Mono'; font-size:11px; font-weight:700; border-radius:999px; min-width:20px; height:20px; display:flex; align-items:center; justify-content:center; padding:0 5px;}
+  .home-filter-pill.late .cnt{background:var(--debt); color:var(--canvas);}
+  .home-see-all{margin-left:auto; font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--amber-bright); background:none; border:none; cursor:pointer;}
+  .home-txn-card{background:var(--pine-light); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:12px; cursor:pointer;}
 </style>
 <!-- Firebase (dipakai untuk sinkronisasi data online antar-HP; lihat konfigurasi di bagian awal skrip aplikasi di bawah) -->
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js"></script>
@@ -323,16 +352,7 @@
       <div style="text-align:right"><button class="logout-btn" id="logoutBtn" hidden>Keluar</button></div>
     </div>
   </div>
-  <div class="tabs">
-    <button class="tab active" data-tab="katalog">KATALOG</button>
-    <button class="tab" data-tab="quick">INPUT CEPAT</button>
-    <button class="tab" data-tab="booking">BOOKING</button>
-    <button class="tab" data-tab="transaksi">TRANSAKSI</button>
-    <button class="tab" data-tab="pelanggan">PELANGGAN</button>
-    <button class="tab" data-tab="laporan">LAPORAN</button>
-    <button class="tab" data-tab="dashboard">DASHBOARD</button>
-  </div>
-  <div id="katalogFilters">
+  <div id="katalogFilters" style="display:none">
     <div class="searchbar"><input id="searchInput" type="text" inputmode="search" placeholder="Cari alat… misal: tenda, kompor, lampu"></div>
     <div style="display:flex; justify-content:flex-end; margin-top:10px;">
       <button id="addProductBtn" class="add-product-btn">+ Tambah Produk</button>
@@ -341,7 +361,8 @@
   </div>
 </header>
 
-<main id="katalogView"></main>
+<main id="homeView"></main>
+<main id="katalogView" style="display:none"></main>
 <main id="quickInputView" style="display:none"></main>
 <main id="bookingView" style="display:none"></main>
 <main id="transaksiView" style="display:none"></main>
@@ -350,6 +371,28 @@
 <main id="dashboardView" style="display:none"></main>
 
 <button class="cart-fab" id="cartFab" hidden><span>Checkout</span><span class="count" id="cartCount">0</span></button>
+
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bn-btn active" data-tab="home">
+    <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11.5 12 4l8 7.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10v9a1 1 0 0 0 1 1h3.5v-5.5h3V20H17a1 1 0 0 0 1-1v-9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="bn-label">Dashboard</span>
+  </button>
+  <button class="bn-btn" data-tab="transaksi">
+    <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5" stroke-linecap="round"/></svg>
+    <span class="bn-label">Transaksi</span>
+  </button>
+  <button class="bn-btn bn-add" data-tab="quick">
+    <span class="bn-add-circle">+</span>
+  </button>
+  <button class="bn-btn" data-tab="laporan">
+    <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10.5 20V4M17 20v-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="bn-label">Laporan</span>
+  </button>
+  <button class="bn-btn" data-tab="pelanggan">
+    <svg class="bn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" stroke-linecap="round"/></svg>
+    <span class="bn-label">Pelanggan</span>
+  </button>
+</nav>
 
 <div class="overlay" id="overlay"></div>
 <div class="drawer" id="drawer">
@@ -751,7 +794,7 @@ function freshDraft(){
 let draft = freshDraft();
 let editPrevCart = null, editPrevDraft = null; // backup so editing can be cancelled without losing an in-progress new sale
 
-let activeCat = "Semua", query = "", activeTab = "katalog", txnFilter = "Semua", bookingFilter = "Semua";
+let activeCat = "Semua", query = "", activeTab = "home", txnFilter = "Semua", bookingFilter = "Semua";
 let txnQuery = "", txnDateMode = "semua", txnDateStart = todayISO(), txnDateEnd = todayISO(); // pencarian & filter periode transaksi
 let quickSelectedCustomer = null; // pelanggan yang dipilih lewat autocomplete di tab Input Cepat
 
@@ -772,34 +815,41 @@ let dashDate = todayISO();
 let dashMonth = todayISO().slice(0,7);
 let dashYear = todayISO().slice(0,4);
 
-// ================= TABS =================
-document.querySelectorAll(".tab").forEach(btn=>{
-  btn.addEventListener("click", ()=>{
-    activeTab = btn.dataset.tab;
-    document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active", b===btn));
-    document.getElementById("katalogFilters").style.display = activeTab==="katalog" ? "" : "none";
-    document.getElementById("katalogView").style.display = activeTab==="katalog" ? "" : "none";
-    document.getElementById("quickInputView").style.display = activeTab==="quick" ? "" : "none";
-    document.getElementById("bookingView").style.display = activeTab==="booking" ? "" : "none";
-    document.getElementById("transaksiView").style.display = activeTab==="transaksi" ? "" : "none";
-    document.getElementById("pelangganView").style.display = activeTab==="pelanggan" ? "" : "none";
-    document.getElementById("laporanView").style.display = activeTab==="laporan" ? "" : "none";
-    document.getElementById("dashboardView").style.display = activeTab==="dashboard" ? "" : "none";
-    document.getElementById("itemCountStat").textContent =
-      activeTab==="katalog" ? (allProducts().length+" ITEM") :
-      activeTab==="quick" ? "" :
-      activeTab==="booking" ? (bookings.filter(b=>b.status==="booking").length+" MENUNGGU") :
-      activeTab==="pelanggan" ? (customers.length+" PELANGGAN") :
-      activeTab==="laporan" ? "" :
-      activeTab==="dashboard" ? "" :
-      (transactions.length+" TRANSAKSI");
-    if(activeTab==="transaksi") renderTransaksi();
-    if(activeTab==="quick") renderQuickInput();
-    if(activeTab==="booking") renderBooking();
-    if(activeTab==="pelanggan") renderPelanggan();
-    if(activeTab==="laporan") renderLaporan();
-    if(activeTab==="dashboard") renderDashboard();
-  });
+// ================= NAV / TABS =================
+// Menu utama sekarang pakai bottom nav (5 tombol) + grid menu di halaman Dashboard (home),
+// jadi navigasi dipusatkan lewat satu fungsi goToTab() dan dipasang lewat event delegation
+// supaya tombol grid menu yang dibuat dinamis (lewat innerHTML) tetap bisa diklik.
+function goToTab(tabName){
+  activeTab = tabName;
+  document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active", b.dataset.tab===tabName));
+  document.getElementById("katalogFilters").style.display = activeTab==="katalog" ? "" : "none";
+  document.getElementById("homeView").style.display = activeTab==="home" ? "" : "none";
+  document.getElementById("katalogView").style.display = activeTab==="katalog" ? "" : "none";
+  document.getElementById("quickInputView").style.display = activeTab==="quick" ? "" : "none";
+  document.getElementById("bookingView").style.display = activeTab==="booking" ? "" : "none";
+  document.getElementById("transaksiView").style.display = activeTab==="transaksi" ? "" : "none";
+  document.getElementById("pelangganView").style.display = activeTab==="pelanggan" ? "" : "none";
+  document.getElementById("laporanView").style.display = activeTab==="laporan" ? "" : "none";
+  document.getElementById("dashboardView").style.display = activeTab==="dashboard" ? "" : "none";
+  document.getElementById("itemCountStat").textContent =
+    activeTab==="katalog" ? (allProducts().length+" ITEM") :
+    activeTab==="booking" ? (bookings.filter(b=>b.status==="booking").length+" MENUNGGU") :
+    activeTab==="pelanggan" ? (customers.length+" PELANGGAN") :
+    activeTab==="transaksi" ? (transactions.length+" TRANSAKSI") :
+    "";
+  if(activeTab==="home") renderHome();
+  if(activeTab==="katalog"){ renderChips(); renderCatalog(); }
+  if(activeTab==="transaksi") renderTransaksi();
+  if(activeTab==="quick") renderQuickInput();
+  if(activeTab==="booking") renderBooking();
+  if(activeTab==="pelanggan") renderPelanggan();
+  if(activeTab==="laporan") renderLaporan();
+  if(activeTab==="dashboard") renderDashboard();
+  window.scrollTo(0,0);
+}
+document.addEventListener("click", (e)=>{
+  const btn = e.target.closest("[data-tab]");
+  if(btn) goToTab(btn.dataset.tab);
 });
 
 // ================= KATALOG =================
@@ -1486,7 +1536,7 @@ saveBtn.addEventListener("click", ()=>{
     closeDrawerFn();
     renderCatalog(); renderCartFab();
     if(rerenderFn) rerenderFn();
-    document.querySelector(`[data-tab="${tabName}"]`).click();
+    goToTab(tabName);
   }
 
   // ---- EDIT AN EXISTING TRANSAKSI ----
@@ -2184,7 +2234,7 @@ function renderBooking(){
   bookingEl.innerHTML = html;
 
   const newBookingBtn = document.getElementById("newBookingBtn");
-  if(newBookingBtn) newBookingBtn.addEventListener("click", ()=>{ document.querySelector('[data-tab="katalog"]').click(); });
+  if(newBookingBtn) newBookingBtn.addEventListener("click", ()=>{ goToTab("katalog"); });
 
   bookingEl.querySelectorAll("[data-bf]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ bookingFilter = btn.dataset.bf; renderBooking(); });
@@ -2855,6 +2905,107 @@ function renderCategoryCard(list){
   </div>`;
 }
 
+const homeEl = document.getElementById("homeView");
+function renderHome(){
+  const todayStr = todayISO();
+  const monthStr = todayStr.slice(0,7);
+
+  const todayList = transactions.filter(t=>txnLocalDate(t)===todayStr);
+  const monthList = transactions.filter(t=>txnLocalDate(t).slice(0,7)===monthStr);
+  const todaySum = computeRevenueSummary(todayList);
+  const monthSum = computeRevenueSummary(monthList);
+  const itemsRentedIn = list => list.reduce((n,t)=> n + t.items.reduce((s,it)=>s+it.qty,0), 0);
+
+  const aktif = transactions.filter(t=>t.status==="aktif");
+  const now = new Date();
+  const late = aktif.filter(t=> new Date(t.endDate+"T23:59:59") < now);
+  const soon = aktif.filter(t=>{
+    const end = new Date(t.endDate+"T23:59:59");
+    const diffH = (end-now)/36e5;
+    return diffH>=0 && diffH<=24;
+  });
+
+  const payBadge = { lunas:["Lunas","badge-lunas"], sebagian:["Sebagian","badge-sebagian"], hutang:["Belum Bayar","badge-hutang"] };
+  const activePreview = [...late, ...soon, ...aktif].filter((t,i,arr)=>arr.findIndex(x=>x.id===t.id)===i).slice(0,3);
+  const txnCardsHtml = activePreview.length===0
+    ? `<div class="empty">Belum ada transaksi aktif saat ini.</div>`
+    : activePreview.map(t=>{
+        const [label, cls] = payBadge[t.payment.status] || ["-","badge-sebagian"];
+        return `<div class="home-txn-card" data-open-txn="${t.id}">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+            <div style="min-width:0;">
+              <div class="pmeta">${fmtDate(t.startDate)} – ${fmtDate(t.endDate)}</div>
+              <div class="pn" style="margin:2px 0;">${t.id}</div>
+              <div class="pmeta">${t.customer.name}</div>
+            </div>
+            <div style="text-align:right; flex-shrink:0;">
+              <div class="pn">${fmt(t.total)}</div>
+              <span class="badge ${cls}" style="margin-top:4px; display:inline-block;">${label}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+
+  homeEl.innerHTML = `
+    <div class="home-card">
+      <div class="home-card-title">Prof Camping</div>
+      <div class="home-stat-grid">
+        <div>
+          <div class="home-stat-label">PENDAPATAN HARI INI</div>
+          <div class="home-stat-value">${fmt(todaySum.totalDiterima)}</div>
+        </div>
+        <div>
+          <div class="home-stat-label">PENDAPATAN BULAN INI</div>
+          <div class="home-stat-value">${fmt(monthSum.totalDiterima)}</div>
+        </div>
+        <div>
+          <div class="home-stat-label">PRODUK TERSEWA HARI INI</div>
+          <div class="home-stat-value">${itemsRentedIn(todayList)}</div>
+        </div>
+        <div>
+          <div class="home-stat-label">PRODUK TERSEWA BULAN INI</div>
+          <div class="home-stat-value">${itemsRentedIn(monthList)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Menu</div>
+    <div class="menu-grid">
+      <div class="menu-item" data-tab="katalog">
+        <div class="menu-item-icon">🏕️</div>
+        <div class="menu-item-label">Katalog</div>
+      </div>
+      <div class="menu-item" data-tab="booking">
+        <div class="menu-item-icon">📅</div>
+        <div class="menu-item-label">Booking</div>
+      </div>
+      <div class="menu-item" data-tab="quick">
+        <div class="menu-item-icon">⚡</div>
+        <div class="menu-item-label">Input Cepat</div>
+      </div>
+      <div class="menu-item" data-tab="dashboard">
+        <div class="menu-item-icon">📊</div>
+        <div class="menu-item-label">Analitik</div>
+      </div>
+    </div>
+
+    <div class="home-active-filters">
+      <button class="home-filter-pill" data-tab="transaksi">Hampir Selesai <span class="cnt">${soon.length}</span></button>
+      <button class="home-filter-pill late" data-tab="transaksi">Terlambat <span class="cnt">${late.length}</span></button>
+      <button class="home-see-all" data-tab="transaksi">Lihat Semua</button>
+    </div>
+    ${txnCardsHtml}
+  `;
+
+  homeEl.querySelectorAll("[data-open-txn]").forEach(card=>{
+    card.addEventListener("click", ()=>{
+      goToTab("transaksi");
+      txnQuery = card.dataset.openTxn;
+      renderTransaksi();
+    });
+  });
+}
+
 function renderDashboard(){
   const range = getDashboardRange();
   const periodList = transactions.filter(t=>{ const d = txnLocalDate(t); return d>=range.start && d<=range.end; });
@@ -2945,10 +3096,12 @@ document.getElementById("searchInput").addEventListener("input", (e)=>{ query = 
 renderChips();
 renderCatalog();
 renderCartFab();
+goToTab("home");
 
 // ================= SINKRONISASI REALTIME (FIREBASE) =================
 function rerenderCurrentTab(){
-  if(activeTab==="katalog"){ renderChips(); renderCatalog(); }
+  if(activeTab==="home"){ renderHome(); }
+  else if(activeTab==="katalog"){ renderChips(); renderCatalog(); }
   else if(activeTab==="quick"){ renderQuickInput(); }
   else if(activeTab==="booking"){ renderBooking(); }
   else if(activeTab==="transaksi"){ renderTransaksi(); }
