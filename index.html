@@ -109,6 +109,20 @@
   .tag-img-placeholder{width:100%; aspect-ratio:1/1; border-radius:7px; margin-bottom:2px; background:var(--pine); border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--canvas-dim); font-size:clamp(7.5px,7cqi,10.5px); font-family:'IBM Plex Mono',monospace; text-align:center; padding:4px;}
   .tag-name{font-size:clamp(10.5px,11.5cqi,15.5px); font-weight:600; line-height:1.25; padding-left:14px; min-height:2.5em;}
   .tag-cat{font-family:'IBM Plex Mono',monospace; font-size:clamp(8px,7cqi,10.5px); color:var(--canvas-dim); letter-spacing:0.06em; padding-left:14px;}
+  .stock-badge{display:flex; gap:4px; flex-wrap:wrap; padding-left:14px;}
+  .stock-badge .sb-item{font-family:'IBM Plex Mono',monospace; font-size:clamp(7.5px,6.5cqi,9.5px); padding:2px 5px; border-radius:5px; font-weight:600; letter-spacing:0.02em;}
+  .sb-bersih{background:rgba(127,168,79,0.18); color:var(--ok);}
+  .sb-keluar{background:rgba(201,162,39,0.18); color:var(--warn);}
+  .sb-kotor{background:rgba(179,59,46,0.18); color:var(--brick);}
+
+  .stok-hint{font-family:'Work Sans'; font-size:12.5px; color:var(--canvas-dim); margin:-6px 0 12px;}
+  .stok-row{display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--pine-light); border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:8px; flex-wrap:wrap;}
+  .stok-row-name{font-weight:600; font-size:14px;}
+  .stok-row-meta{font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); margin-top:3px;}
+  .stok-row-meta b{color:var(--brick);}
+  .stok-row-action{display:flex; align-items:center; gap:10px; flex:none;}
+  .stok-row-ok{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--ok); flex:none;}
+  .stok-done-btn{padding:8px 12px; border-radius:8px; border:1px solid var(--ok); background:transparent; color:var(--ok); font-family:'IBM Plex Mono'; font-size:11.5px; font-weight:600; cursor:pointer; white-space:nowrap;}
   .tag-bottom{display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:2px; flex-wrap:wrap;}
   .tag-price{font-family:'IBM Plex Mono',monospace; font-size:clamp(10px,9.5cqi,16px); color:var(--amber-bright); font-weight:600;}
   .tag-price small{font-size:clamp(7.5px,6.5cqi,10.5px); color:var(--canvas-dim); font-weight:500;}
@@ -500,6 +514,7 @@
 <main id="pelangganView" style="display:none"></main>
 <main id="laporanView" style="display:none"></main>
 <main id="dashboardView" style="display:none"></main>
+<main id="stokView" style="display:none"></main>
 
 <button class="cart-fab" id="cartFab" hidden><span>Checkout</span><span class="count" id="cartCount">0</span></button>
 
@@ -548,6 +563,21 @@
     <input class="field" id="newProdCat" placeholder="Atau ketik kategori baru">
     <div class="section-label">Harga Sewa per Hari (Rp)</div>
     <input class="field" type="number" min="0" id="newProdPrice" placeholder="Contoh: 25000">
+    <div class="section-label">Stok — Total Unit Dimiliki</div>
+    <input class="field" type="number" min="0" id="newProdStockTotal" placeholder="Contoh: 8">
+    <div class="section-label">Stok — Bersih Saat Ini (siap sewa)</div>
+    <input class="field" type="number" min="0" id="newProdStockBersih" placeholder="Contoh: 8">
+    <div id="newProdStockInfo" style="font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); margin-top:2px;"></div>
+    <div class="section-label">Jenis Proses Sebelum Siap Sewa Lagi</div>
+    <select class="field" id="newProdJenisProses">
+      <option value="none">Barang Biasa (langsung bersih saat kembali)</option>
+      <option value="cuci">Wajib Dicuci Dulu</option>
+      <option value="gas">Wajib Isi Ulang Gas Dulu</option>
+    </select>
+    <div id="newProdGajiCuciWrap" style="display:none;">
+      <div class="section-label">Gaji Karyawan per Tenda Dicuci (Rp)</div>
+      <input class="field" type="number" min="0" id="newProdGajiCuci" placeholder="Contoh: 15000">
+    </div>
     <div class="section-label">Foto Produk (opsional)</div>
     <input class="field" type="file" accept="image/*" id="newProdImageInput">
     <div id="newProdImagePreviewWrap" style="display:none; margin-top:8px; align-items:center; gap:10px;">
@@ -745,7 +775,8 @@ const FIRESTORE_SYNCED_KEYS = [
   "basecamp_deleted_transactions",
   "basecamp_bookings",
   "basecamp_custom_products",
-  "basecamp_product_overrides"
+  "basecamp_product_overrides",
+  "basecamp_product_stock"
 ];
 
 // ================= KONEKSI KE GOOGLE SHEETS (rekap transaksi otomatis) =================
@@ -968,6 +999,57 @@ function custDot(name){
 })();
 let customProducts = load("basecamp_custom_products", []); // manually-added products: [{id,name,cat,price,unit}]
 let productOverrides = load("basecamp_product_overrides", {}); // built-in product edits: id -> {name,cat,price}
+
+// ================= STOK GUDANG =================
+// Setiap barang punya 4 angka stok:
+//  - total   : total unit yang DIMILIKI toko (diisi manual sekali per barang, bisa diedit kalau beli tambahan)
+//  - bersih  : stok siap sewa saat ini (diisi manual oleh admin)
+//  - keluar  : dihitung OTOMATIS dari transaksi yang masih "aktif" & belum dikembalikan (tidak diinput manual)
+//  - kotor   : sisa hasil hitungan = total - bersih - keluar (tidak diinput manual)
+// jenisProses menandai barang yang perlu "diproses" dulu sebelum siap sewa lagi (dipakai di Langkah 2 & 3):
+//   'none' = barang biasa (langsung balik ke bersih saat kembali)
+//   'cuci' = wajib dicuci dulu (sleeping bag, matras, flysheet, nesting, tas, jaket, sepatu, sendal, tikar piknik)
+//   'gas'  = wajib diisi ulang gas dulu (tabung gas: saat kembali TIDAK otomatis nambah stok bersih,
+//            harus diisi ulang dulu oleh crew baru masuk stok bersih lagi)
+let productStock = load("basecamp_product_stock", {}); // id -> {total, bersih, jenisProses}
+
+const WAJIB_CUCI_KEYWORDS = ["sleeping bag","matras","flysheet","nesting","tas hydropack","jaket","sepatu","sendal","tikar piknik","hammock","sarung tangan"];
+const WAJIB_ISI_ULANG_KEYWORDS = ["tabung","isi gas"];
+
+function defaultJenisProses(name, cat){
+  const n = (name||"").toLowerCase();
+  if(cat==="Tenda") return "cuci"; // semua tenda & aksesorisnya (flysheet, tiang) wajib dicuci
+  if(WAJIB_ISI_ULANG_KEYWORDS.some(k=>n.includes(k))) return "gas";
+  if(WAJIB_CUCI_KEYWORDS.some(k=>n.includes(k))) return "cuci";
+  return "none";
+}
+function getStock(product){
+  const s = productStock[product.id];
+  if(s) return Object.assign({ gajiCuci:0 }, s);
+  return { total:0, bersih:0, jenisProses: defaultJenisProses(product.name, product.cat), gajiCuci:0 };
+}
+function setStock(id, patch){
+  const current = productStock[id] || { total:0, bersih:0, jenisProses:"none", gajiCuci:0 };
+  productStock[id] = Object.assign({}, current, patch);
+  save("basecamp_product_stock", productStock);
+}
+// Stok Keluar: total unit barang ini yang masih "di luar" (ada di transaksi AKTIF, belum dikembalikan semua)
+function stockKeluar(productName){
+  return transactions.reduce((sum,t)=>{
+    if(t.status!=="aktif") return sum;
+    return sum + t.items.filter(i=>i.name===productName).reduce((s,i)=>s + itemRemainingQty(i), 0);
+  }, 0);
+}
+function stockKotor(product){
+  const s = getStock(product);
+  return Math.max(0, s.total - s.bersih - stockKeluar(product.name));
+}
+function jenisProsesLabel(jp){
+  return jp==="gas" ? "Kosong" : jp==="cuci" ? "Kotor" : "Kotor";
+}
+function jenisProsesFullLabel(jp){
+  return jp==="gas" ? "Wajib Isi Ulang Gas" : jp==="cuci" ? "Wajib Dicuci" : "Barang Biasa";
+}
 // Foto default produk, diekstrak & dikompres dari katalog PDF terbaru — dipakai sebagai foto awal
 // kalau belum ada foto yang disimpan manual lewat tombol edit produk.
 const DEFAULT_PRODUCT_IMAGES = {
@@ -1115,6 +1197,7 @@ function goToTab(tabName, opts={}){
   document.getElementById("pelangganView").style.display = activeTab==="pelanggan" ? "" : "none";
   document.getElementById("laporanView").style.display = activeTab==="laporan" ? "" : "none";
   document.getElementById("dashboardView").style.display = activeTab==="dashboard" ? "" : "none";
+  document.getElementById("stokView").style.display = activeTab==="stok" ? "" : "none";
   document.getElementById("itemCountStat").textContent =
     activeTab==="katalog" ? (allProducts().length+" ITEM") :
     activeTab==="booking" ? (bookings.filter(b=>b.status==="booking").length+" MENUNGGU") :
@@ -1129,6 +1212,7 @@ function goToTab(tabName, opts={}){
   if(activeTab==="pelanggan") renderPelanggan();
   if(activeTab==="laporan") renderLaporan();
   if(activeTab==="dashboard") renderDashboard();
+  if(activeTab==="stok") renderStok();
   window.scrollTo(0,0);
 }
 document.addEventListener("click", (e)=>{
@@ -1240,6 +1324,16 @@ const saveProductBtn = document.getElementById("saveProductBtn");
 const newProdName = document.getElementById("newProdName");
 const newProdCat = document.getElementById("newProdCat");
 const newProdPrice = document.getElementById("newProdPrice");
+const newProdStockTotal = document.getElementById("newProdStockTotal");
+const newProdStockBersih = document.getElementById("newProdStockBersih");
+const newProdJenisProses = document.getElementById("newProdJenisProses");
+const newProdGajiCuciWrap = document.getElementById("newProdGajiCuciWrap");
+const newProdGajiCuci = document.getElementById("newProdGajiCuci");
+const newProdStockInfo = document.getElementById("newProdStockInfo");
+function updateGajiCuciVisibility(){
+  newProdGajiCuciWrap.style.display = newProdCat.value.trim()==="Tenda" ? "" : "none";
+}
+newProdCat.addEventListener("input", updateGajiCuciVisibility);
 const newProdError = document.getElementById("newProdError");
 let editingProductId = null; // null = adding a new product; otherwise the id of the product being edited
 
@@ -1338,6 +1432,15 @@ function openProductDrawer(product){
   newProdName.value = product ? product.name : "";
   newProdCat.value = product ? product.cat : "";
   newProdPrice.value = product ? product.price : "";
+  const stock = product ? getStock(product) : { total:0, bersih:0, jenisProses:"none" };
+  newProdStockTotal.value = product ? stock.total : "";
+  newProdStockBersih.value = product ? stock.bersih : "";
+  newProdJenisProses.value = stock.jenisProses;
+  newProdGajiCuci.value = product ? (stock.gajiCuci||0) : "";
+  updateGajiCuciVisibility();
+  newProdStockInfo.textContent = product
+    ? `Keluar (transaksi aktif): ${stockKeluar(product.name)} · ${jenisProsesLabel(stock.jenisProses)} (dihitung otomatis): ${stockKotor(product)}`
+    : "";
   newProdError.textContent = "";
   newProdImageInput.value = "";
   newProdImageStatus.textContent = "";
@@ -1361,6 +1464,11 @@ saveProductBtn.addEventListener("click", ()=>{
     return;
   }
 
+  const stockTotal = Math.max(0, parseInt(newProdStockTotal.value) || 0);
+  const stockBersih = Math.max(0, Math.min(stockTotal, parseInt(newProdStockBersih.value) || 0));
+  const jenisProses = newProdJenisProses.value;
+  const gajiCuci = Math.max(0, parseInt(newProdGajiCuci.value) || 0);
+
   if(editingProductId){
     if(editingProductId.startsWith("c")){
       // editing a manually-added product
@@ -1375,18 +1483,32 @@ saveProductBtn.addEventListener("click", ()=>{
         save("basecamp_product_overrides", productOverrides);
       }
     }
+    setStock(editingProductId, { total: stockTotal, bersih: stockBersih, jenisProses, gajiCuci });
     if(pendingProductImage===null) deleteProductImage(editingProductId);
     else if(typeof pendingProductImage==="string") saveProductImage(editingProductId, pendingProductImage);
   } else {
     const product = { id: "c"+uid(), name, cat, price, unit: "Hari" };
     customProducts.push(product);
     save("basecamp_custom_products", customProducts);
+    setStock(product.id, { total: stockTotal, bersih: stockBersih, jenisProses, gajiCuci });
     if(typeof pendingProductImage==="string") saveProductImage(product.id, pendingProductImage);
   }
 
   closeProductDrawer();
   renderChips(); renderCatalog();
 });
+function stockBadgeHtml(p){
+  const s = getStock(p);
+  if(s.total<=0) return "";
+  const keluar = stockKeluar(p.name);
+  const kotor = stockKotor(p);
+  const kotorLabel = jenisProsesLabel(s.jenisProses);
+  return `<div class="stock-badge">
+    <span class="sb-item sb-bersih">B ${s.bersih}</span>
+    <span class="sb-item sb-keluar">K ${keluar}</span>
+    <span class="sb-item sb-kotor" title="${kotorLabel}">${s.jenisProses==='gas'?'Ksg':'Ktr'} ${kotor}</span>
+  </div>`;
+}
 function cardHtml(p){
   const qty = cart[p.id] || 0;
   const inCart = qty > 0;
@@ -1400,6 +1522,7 @@ function cardHtml(p){
     ${img ? `<img src="${img}" class="tag-img" alt="${p.name}" loading="lazy" decoding="async">` : `<div class="tag-img-placeholder">Belum ada foto</div>`}
     <div class="tag-name">${p.name}${isCustom ? `<span class="custom-badge">MANUAL</span>` : ""}</div>
     <div class="tag-cat">${p.cat}</div>
+    ${stockBadgeHtml(p)}
     <div class="tag-bottom">
       <div class="tag-price">${fmt(p.price)} <small>/ ${p.unit.toLowerCase()}</small></div>
       ${inCart ? `<div class="qty-stepper">
@@ -2671,6 +2794,19 @@ document.getElementById("confirmReturnBtn").addEventListener("click", ()=>{
   t.items.forEach((i, idx)=>{
     const sel = returnDraft[idx] || 0;
     i.returnedQty = itemReturnedQty(i) + sel;
+    if(sel>0){
+      // Barang biasa (jenisProses "none") langsung balik ke Stok Bersih otomatis.
+      // Barang wajib dicuci / wajib isi ulang gas TIDAK ditambahkan ke Bersih di sini —
+      // mereka otomatis masuk hitungan Kotor/Kosong (lihat stockKotor()), dan baru pindah
+      // ke Bersih lewat menu "Stok" setelah diproses (dicuci / diisi ulang).
+      const product = allProducts().find(p=>p.name===i.name);
+      if(product){
+        const s = getStock(product);
+        if(s.jenisProses==="none" && s.total>0){
+          setStock(product.id, { bersih: Math.min(s.total, s.bersih + sel) });
+        }
+      }
+    }
   });
   if(txnReturnState(t)==="full") t.status = "selesai";
   t.updatedAt = new Date().toISOString();
@@ -3276,6 +3412,92 @@ function renderQuickInput(){
 
 const laporanEl = document.getElementById("laporanView");
 const dashboardEl = document.getElementById("dashboardView");
+const stokEl = document.getElementById("stokView");
+
+// ================= STOK — PROSES CUCI / ISI ULANG GAS =================
+// Halaman ini khusus untuk menandai barang yang sudah selesai diproses (dicuci / diisi ulang gas)
+// supaya pindah dari Kotor/Kosong balik ke Stok Bersih. Tenda dicuci lewat aplikasi terpisah (Langkah 3);
+// halaman ini untuk barang wajib cuci LAINNYA (sleeping bag, matras, dst) + tabung gas.
+let stokProcessDraft = {}; // id -> jumlah yang mau ditandai selesai
+
+function markStockProcessed(product, qty){
+  const s = getStock(product);
+  const kotor = stockKotor(product);
+  const jumlah = Math.max(0, Math.min(qty, kotor));
+  if(jumlah<=0) return;
+  setStock(product.id, { bersih: Math.min(s.total, s.bersih + jumlah) });
+}
+
+function renderStok(){
+  const items = allProducts().filter(p=>{
+    const s = getStock(p);
+    return s.jenisProses!=="none" && s.total>0;
+  });
+  const cuciItems = items.filter(p=>getStock(p).jenisProses==="cuci" && p.cat!=="Tenda");
+  const gasItems = items.filter(p=>getStock(p).jenisProses==="gas");
+  const tendaCuciItems = items.filter(p=>getStock(p).jenisProses==="cuci" && p.cat==="Tenda");
+
+  function rowHtml(p){
+    const s = getStock(p);
+    const kotor = stockKotor(p);
+    const keluar = stockKeluar(p.name);
+    const val = stokProcessDraft[p.id] ?? kotor;
+    return `<div class="stok-row" data-stokid="${p.id}">
+      <div class="stok-row-info">
+        <div class="stok-row-name">${p.name}</div>
+        <div class="stok-row-meta">Total ${s.total} · Bersih ${s.bersih} · Keluar ${keluar} · ${jenisProsesLabel(s.jenisProses)} <b>${kotor}</b></div>
+      </div>
+      ${kotor>0 ? `
+      <div class="stok-row-action">
+        <div class="stepper" data-stok-stepper="${p.id}" data-max="${kotor}">
+          <button type="button" data-op="-">−</button><span class="val">${val}</span><button type="button" data-op="+">+</button>
+        </div>
+        <button class="stok-done-btn" data-doneid="${p.id}">✓ Tandai Selesai</button>
+      </div>` : `<div class="stok-row-ok">✅ Semua bersih</div>`}
+    </div>`;
+  }
+
+  function sectionHtml(title, hint, list){
+    if(list.length===0) return "";
+    return `<div class="group-title">${title}</div>
+      <div class="stok-hint">${hint}</div>
+      ${list.map(rowHtml).join("")}`;
+  }
+
+  let html = `<div class="section-label">Kelola Stok Proses</div>`;
+  if(items.length===0){
+    html += `<div class="empty">Belum ada barang dengan jenis proses "Wajib Dicuci" / "Wajib Isi Ulang Gas". Atur lewat ✎ edit produk di Katalog.</div>`;
+  } else {
+    html += sectionHtml("🧺 Wajib Dicuci (Non-Tenda)", "Barang wajib cuci ini dikembalikan otomatis masuk Kotor. Tandai selesai di sini setelah dicuci.", cuciItems);
+    html += sectionHtml("⛽ Wajib Isi Ulang Gas", "Saat tabung kembali TIDAK otomatis nambah Bersih — tandai selesai di sini setelah diisi ulang.", gasItems);
+    html += sectionHtml("⛺ Tenda (Wajib Dicuci)", "Tenda dicuci & ditandai lewat aplikasi karyawan cuci tenda tersendiri (Langkah 3). Ditampilkan di sini sebagai info saja.", tendaCuciItems);
+  }
+  stokEl.innerHTML = html;
+
+  stokEl.querySelectorAll(".stepper[data-stok-stepper]").forEach(st=>{
+    st.querySelectorAll("button").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = st.dataset.stokStepper;
+        const max = parseInt(st.dataset.max);
+        let v = stokProcessDraft[id] ?? max;
+        v = btn.dataset.op==="+" ? Math.min(max, v+1) : Math.max(0, v-1);
+        stokProcessDraft[id] = v;
+        renderStok();
+      });
+    });
+  });
+  stokEl.querySelectorAll(".stok-done-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const p = allProducts().find(x=>x.id===btn.dataset.doneid);
+      if(!p) return;
+      const qty = stokProcessDraft[p.id] ?? stockKotor(p);
+      markStockProcessed(p, qty);
+      delete stokProcessDraft[p.id];
+      renderStok();
+      renderCatalog();
+    });
+  });
+}
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
 // Convert a stored UTC instant (createdAt, e.g. "2026-08-01T09:00:00.000Z") into the admin's local calendar date.
@@ -3658,6 +3880,10 @@ function renderHome(){
         <div class="menu-item-icon">📊</div>
         <div class="menu-item-label">Analitik</div>
       </div>
+      <div class="menu-item" data-tab="stok">
+        <div class="menu-item-icon">🧺</div>
+        <div class="menu-item-label">Stok</div>
+      </div>
     </div>
 
     <div class="home-active-filters">
@@ -3787,6 +4013,7 @@ function rerenderCurrentTab(){
   else if(activeTab==="pelanggan"){ renderPelanggan(); }
   else if(activeTab==="laporan"){ renderLaporan(); }
   else if(activeTab==="dashboard"){ renderDashboard(); }
+  else if(activeTab==="stok"){ renderStok(); }
   renderCartFab();
 }
 
@@ -3810,6 +4037,7 @@ if(firebaseEnabled){
     productOverrides = v;
     CATALOG.forEach(p=>{ if(productOverrides[p.id]) Object.assign(p, productOverrides[p.id]); });
   });
+  attachFirestoreSync("basecamp_product_stock", v=>{ productStock = v; });
 
   // Foto produk disimpan di koleksi TERPISAH (1 dokumen per produk), bukan digabung seperti data di atas,
   // supaya ukuran tiap dokumen tetap kecil dan tidak gampang kena limit 1MB Firestore.
