@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Cuci Tenda — Prof Camping</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cuci Tenda">
+<meta name="theme-color" content="#1B1512">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --pine:#1B1512; --pine-light:#26201B; --canvas:#F1E4D2; --canvas-dim:#C7B49C;
+    --amber:#C2622A; --amber-bright:#F2903D; --brick:#B33B2E; --line:#453A31;
+    --ok:#7FA84F; --warn:#C9A227;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--pine); overscroll-behavior-y:none;}
+  body{font-family:'Work Sans', sans-serif; color:var(--canvas); padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); min-height:100vh;}
+  h1,h2,.display{font-family:'Big Shoulders Display', sans-serif; text-transform:uppercase; letter-spacing:0.02em;}
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  button{font-family:inherit;}
+
+  header{position:sticky; top:0; z-index:20; background:var(--pine); border-bottom:1px solid var(--line); padding:18px 20px;}
+  header h1{font-size:26px; font-weight:800; margin:0; line-height:0.95;}
+  header .tagline{font-size:11px; color:var(--amber-bright); font-family:'IBM Plex Mono',monospace; letter-spacing:0.08em; margin-top:4px;}
+
+  main{padding:16px; max-width:640px; margin:0 auto 40px;}
+  .section-label{font-size:13px; font-family:'IBM Plex Mono',monospace; letter-spacing:0.1em; color:var(--amber-bright); margin:22px 0 10px;}
+  .hint{font-size:12.5px; color:var(--canvas-dim); margin:-4px 0 14px; line-height:1.5;}
+  .empty{padding:30px 16px; text-align:center; color:var(--canvas-dim); font-size:13.5px;}
+
+  .tenda-row{background:var(--pine-light); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px;}
+  .tenda-row-top{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .tenda-name{font-weight:600; font-size:15px; line-height:1.3;}
+  .tenda-meta{font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); margin-top:4px;}
+  .tenda-gaji{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--amber-bright); margin-top:2px; font-weight:600;}
+  .tenda-row.done{opacity:0.55;}
+  .tenda-done-tag{font-family:'IBM Plex Mono'; font-size:11px; color:var(--ok); font-weight:600; white-space:nowrap;}
+
+  .stepper{display:flex; align-items:center; gap:12px; margin-top:12px;}
+  .stepper button{width:38px; height:38px; border-radius:9px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-size:20px; cursor:pointer; line-height:1;}
+  .stepper button:active{background:var(--amber); color:var(--pine);}
+  .stepper .val{font-family:'IBM Plex Mono'; font-size:18px; font-weight:600; min-width:28px; text-align:center;}
+
+  .summary-bar{position:sticky; bottom:0; background:var(--pine); border-top:1px solid var(--line); padding:14px 16px; margin:24px -16px 0; display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .summary-bar .sb-label{font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim);}
+  .summary-bar .sb-amount{font-family:'Big Shoulders Display'; font-size:24px; font-weight:800; color:var(--amber-bright);}
+  .submit-btn{padding:13px 20px; border-radius:10px; border:none; background:var(--amber); color:var(--pine); font-family:'IBM Plex Mono'; font-weight:700; font-size:13px; letter-spacing:0.03em; cursor:pointer; white-space:nowrap;}
+  .submit-btn:disabled{opacity:0.4;}
+
+  .log-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(69,58,49,0.5); font-size:13px;}
+  .log-row:last-child{border-bottom:none;}
+  .log-date{font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim);}
+  .log-items{font-size:12.5px; margin-top:2px; color:var(--canvas-dim);}
+  .log-amount{font-family:'IBM Plex Mono'; font-weight:600; color:var(--ok); white-space:nowrap;}
+
+  .totals-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:6px;}
+  .totals-card{background:var(--pine-light); border:1px solid var(--line); border-radius:10px; padding:12px;}
+  .totals-card .tc-label{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--canvas-dim); letter-spacing:0.04em;}
+  .totals-card .tc-value{font-family:'Big Shoulders Display'; font-size:22px; font-weight:800; color:var(--canvas); margin-top:2px;}
+
+  .status-pill{display:inline-block; font-family:'IBM Plex Mono'; font-size:10.5px; padding:3px 8px; border-radius:999px; margin-top:10px;}
+  .status-offline{background:rgba(201,162,39,0.18); color:var(--warn);}
+  .status-online{background:rgba(127,168,79,0.18); color:var(--ok);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧺 Cuci Tenda</h1>
+  <div class="tagline">PROF CAMPING · APLIKASI KARYAWAN</div>
+  <span class="status-pill" id="statusPill">Menghubungkan…</span>
+</header>
+
+<main>
+  <div class="section-label">Total Gaji Belum Diambil</div>
+  <div class="totals-grid">
+    <div class="totals-card">
+      <div class="tc-label">HARI INI</div>
+      <div class="tc-value mono" id="totalToday">Rp 0</div>
+    </div>
+    <div class="totals-card">
+      <div class="tc-label">BULAN INI</div>
+      <div class="tc-value mono" id="totalMonth">Rp 0</div>
+    </div>
+  </div>
+
+  <div class="section-label">Tenda yang Perlu Dicuci</div>
+  <div class="hint">Pilih jumlah tenda yang sudah kamu cuci hari ini untuk tiap jenis, lalu tekan Simpan di bawah. Stok bersih & gajimu otomatis kehitung.</div>
+  <div id="tendaList"><div class="empty">Memuat data…</div></div>
+
+  <div class="section-label">Riwayat Cucian</div>
+  <div id="logList"><div class="empty">Belum ada riwayat.</div></div>
+</main>
+
+<div class="summary-bar">
+  <div>
+    <div class="sb-label">GAJI DIPILIH SEKARANG</div>
+    <div class="sb-amount mono" id="selectedAmount">Rp 0</div>
+  </div>
+  <button class="submit-btn" id="submitBtn" disabled>✓ Simpan Cucian</button>
+</div>
+
+<script>
+// ================= FIREBASE (project sama dengan aplikasi admin Prof Camping) =================
+const firebaseConfig = {
+  apiKey: "AIzaSyD_HTaCk6Bv_GVpzE0Nh_033rZ6SMHbz3Q",
+  authDomain: "profcamping-3396a.firebaseapp.com",
+  projectId: "profcamping-3396a",
+  storageBucket: "profcamping-3396a.firebasestorage.app",
+  messagingSenderId: "1018588273596",
+  appId: "1:1018588273596:web:5dc20386584bad104869b9"
+};
+let db = null, firebaseEnabled = false;
+try{
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  db.settings({ ignoreUndefinedProperties: true });
+  firebaseEnabled = true;
+}catch(err){ console.error("Gagal konek Firebase:", err); }
+
+const fmt = n => "Rp " + (n||0).toLocaleString("id-ID");
+const todayISO = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const monthKey = () => todayISO().slice(0,7);
+
+// Data ini datang LANGSUNG dari database yang sama dipakai aplikasi admin —
+// bukan disimpan lokal, supaya selalu sinkron dengan stok & katalog terbaru.
+let CATALOG_CACHE = [];       // daftar tenda + override nama/kategori dari admin
+let productStock = {};        // id -> {total,bersih,jenisProses,gajiCuci}
+let transactions = [];        // dipakai untuk hitung "keluar" (sedang disewa)
+let cuciLog = [];              // riwayat cucian tenda: [{id,date,items:[{id,name,qty,gajiPerUnit,subtotal}],total,at}]
+let selectedQty = {};          // productId -> jumlah dipilih untuk disimpan sekarang
+
+function itemRemainingQty(i){ return i.qty - Math.min(i.returnedQty||0, i.qty); }
+function stockKeluar(name){
+  return transactions.reduce((sum,t)=>{
+    if(t.status!=="aktif") return sum;
+    return sum + (t.items||[]).filter(i=>i.name===name).reduce((s,i)=>s+itemRemainingQty(i),0);
+  },0);
+}
+function stockKotor(p){
+  const s = productStock[p.id] || {total:0,bersih:0};
+  return Math.max(0, (s.total||0) - (s.bersih||0) - stockKeluar(p.name));
+}
+
+function renderTendaList(){
+  const listEl = document.getElementById("tendaList");
+  const items = CATALOG_CACHE.filter(p=>{
+    const s = productStock[p.id];
+    return s && s.jenisProses==="cuci" && p.cat==="Tenda" && (s.total||0)>0;
+  });
+  if(items.length===0){
+    listEl.innerHTML = `<div class="empty">Belum ada tenda yang terdaftar di sistem stok. Minta admin isi Total Unit tenda dulu lewat aplikasi utama.</div>`;
+    updateSummary();
+    return;
+  }
+  listEl.innerHTML = items.map(p=>{
+    const s = productStock[p.id];
+    const kotor = stockKotor(p);
+    const val = selectedQty[p.id] || 0;
+    const gaji = s.gajiCuci || 0;
+    return `<div class="tenda-row ${kotor<=0?'done':''}" data-tid="${p.id}">
+      <div class="tenda-row-top">
+        <div>
+          <div class="tenda-name">${p.name}</div>
+          <div class="tenda-meta">Kotor saat ini: ${kotor} unit</div>
+          <div class="tenda-gaji">${fmt(gaji)} / tenda</div>
+        </div>
+        ${kotor<=0 ? `<span class="tenda-done-tag">✅ Semua bersih</span>` : ""}
+      </div>
+      ${kotor>0 ? `<div class="stepper" data-stepper="${p.id}" data-max="${kotor}">
+        <button type="button" data-op="-">−</button><span class="val">${val}</span><button type="button" data-op="+">+</button>
+      </div>` : ""}
+    </div>`;
+  }).join("");
+
+  listEl.querySelectorAll(".stepper").forEach(st=>{
+    st.querySelectorAll("button").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const id = st.dataset.stepper;
+        const max = parseInt(st.dataset.max);
+        let v = selectedQty[id] || 0;
+        v = btn.dataset.op==="+" ? Math.min(max, v+1) : Math.max(0, v-1);
+        selectedQty[id] = v;
+        renderTendaList();
+      });
+    });
+  });
+  updateSummary();
+}
+
+function updateSummary(){
+  let total = 0;
+  Object.keys(selectedQty).forEach(id=>{
+    const qty = selectedQty[id] || 0;
+    if(qty<=0) return;
+    const p = CATALOG_CACHE.find(x=>x.id===id);
+    const s = productStock[id];
+    if(p && s) total += qty * (s.gajiCuci||0);
+  });
+  document.getElementById("selectedAmount").textContent = fmt(total);
+  const anySelected = Object.values(selectedQty).some(v=>v>0);
+  document.getElementById("submitBtn").disabled = !anySelected;
+}
+
+function renderTotals(){
+  const today = todayISO();
+  const thisMonth = monthKey();
+  const totalToday = cuciLog.filter(l=>l.date===today).reduce((s,l)=>s+l.total,0);
+  const totalMonth = cuciLog.filter(l=>(l.date||"").slice(0,7)===thisMonth).reduce((s,l)=>s+l.total,0);
+  document.getElementById("totalToday").textContent = fmt(totalToday);
+  document.getElementById("totalMonth").textContent = fmt(totalMonth);
+}
+
+function renderLog(){
+  const listEl = document.getElementById("logList");
+  const sorted = [...cuciLog].sort((a,b)=> new Date(b.at) - new Date(a.at)).slice(0,30);
+  if(sorted.length===0){
+    listEl.innerHTML = `<div class="empty">Belum ada riwayat.</div>`;
+    return;
+  }
+  listEl.innerHTML = sorted.map(l=>`
+    <div class="log-row">
+      <div>
+        <div class="log-date">${l.date}</div>
+        <div class="log-items">${l.items.map(i=>`${i.name} ×${i.qty}`).join(", ")}</div>
+      </div>
+      <div class="log-amount mono">${fmt(l.total)}</div>
+    </div>
+  `).join("");
+}
+
+document.getElementById("submitBtn").addEventListener("click", async ()=>{
+  const entryItems = [];
+  let total = 0;
+  Object.keys(selectedQty).forEach(id=>{
+    const qty = selectedQty[id] || 0;
+    if(qty<=0) return;
+    const p = CATALOG_CACHE.find(x=>x.id===id);
+    const s = productStock[id];
+    if(!p || !s) return;
+    const subtotal = qty * (s.gajiCuci||0);
+    entryItems.push({ id, name:p.name, qty, gajiPerUnit: s.gajiCuci||0, subtotal });
+    total += subtotal;
+  });
+  if(entryItems.length===0) return;
+
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true; btn.textContent = "Menyimpan…";
+
+  try{
+    // Pindahkan kuantitas terpilih dari Kotor -> Bersih (menaikkan stok bersih tenda)
+    const newStock = Object.assign({}, productStock);
+    entryItems.forEach(it=>{
+      const s = newStock[it.id] || { total:0, bersih:0, jenisProses:"cuci", gajiCuci:0 };
+      newStock[it.id] = Object.assign({}, s, { bersih: Math.min(s.total||0, (s.bersih||0) + it.qty) });
+    });
+    await db.collection("prof_camping_data").doc("basecamp_product_stock").set({ value: newStock, updatedAt: Date.now() });
+    productStock = newStock;
+
+    // Catat log cucian (untuk rekap gaji karyawan)
+    const entry = { id: Date.now().toString(36)+Math.random().toString(36).slice(2,8), date: todayISO(), items: entryItems, total, at: new Date().toISOString() };
+    const newLog = [...cuciLog, entry];
+    await db.collection("prof_camping_data").doc("basecamp_cuci_tenda_log").set({ value: newLog, updatedAt: Date.now() });
+    cuciLog = newLog;
+
+    selectedQty = {};
+    renderTendaList(); renderTotals(); renderLog();
+  }catch(err){
+    console.error("Gagal menyimpan cucian:", err);
+    alert("Gagal menyimpan, coba lagi. Pastikan internet aktif.");
+  }finally{
+    btn.textContent = "✓ Simpan Cucian";
+    updateSummary();
+  }
+});
+
+// ================= SINKRONISASI REALTIME =================
+if(firebaseEnabled){
+  const statusPill = document.getElementById("statusPill");
+  let gotCatalog = false, gotStock = false;
+
+  // Katalog (nama/kategori tenda) — dibaca dari override yang sama dipakai aplikasi admin,
+  // digabung dengan daftar bawaan tenda supaya nama & kategori selalu sinkron.
+  const BUILTIN_TENDA_NAMES = [
+    ["p0","Tenda 7 Orang Tendaki Molucass 6 Pro"],["p1","Tenda 7 Orang Wildshell Mandala 6 Pro"],
+    ["p2","Tenda 5 Orang Wildshell Raya 4 Pro Hijau"],["p3","Tenda 5 Orang Wildshell Jayadipa"],
+    ["p4","Tenda 5 Orang Rei Eliot V3"],["p5","Tenda 4 Orang Compass Lwy"],
+    ["p6","Tenda 2-3 Orang Wildshell Navageo"],["p7","Tenda 4 Orang Dhaulgiri"],
+    ["p8","Tenda 2 Orang Dhaulgiri"],["p9","Tenda 2 Orang Arei"],
+    ["p10","Flysheet"],["p11","Tiang Flysheet"]
+  ];
+  function buildCatalog(overrides, customProducts){
+    const base = BUILTIN_TENDA_NAMES.map(([id,name])=>({ id, name, cat:"Tenda" }));
+    base.forEach(p=>{ if(overrides[p.id]){ Object.assign(p, overrides[p.id]); } });
+    const customTenda = (customProducts||[]).filter(p=>p.cat==="Tenda");
+    return [...base, ...customTenda];
+  }
+  let overridesCache = {}, customProductsCache = [];
+
+  db.collection("prof_camping_data").doc("basecamp_product_overrides").onSnapshot(snap=>{
+    overridesCache = snap.exists ? (snap.data().value||{}) : {};
+    CATALOG_CACHE = buildCatalog(overridesCache, customProductsCache);
+    renderTendaList();
+  });
+  db.collection("prof_camping_data").doc("basecamp_custom_products").onSnapshot(snap=>{
+    customProductsCache = snap.exists ? (snap.data().value||[]) : [];
+    CATALOG_CACHE = buildCatalog(overridesCache, customProductsCache);
+    renderTendaList();
+  });
+  db.collection("prof_camping_data").doc("basecamp_product_stock").onSnapshot(snap=>{
+    productStock = snap.exists ? (snap.data().value||{}) : {};
+    gotStock = true;
+    statusPill.textContent = "Tersambung Online"; statusPill.className = "status-pill status-online";
+    renderTendaList();
+  }, ()=>{ statusPill.textContent = "Gagal Tersambung"; statusPill.className = "status-pill status-offline"; });
+  db.collection("prof_camping_data").doc("basecamp_transactions").onSnapshot(snap=>{
+    transactions = snap.exists ? (snap.data().value||[]) : [];
+    renderTendaList();
+  });
+  db.collection("prof_camping_data").doc("basecamp_cuci_tenda_log").onSnapshot(snap=>{
+    cuciLog = snap.exists ? (snap.data().value||[]) : [];
+    renderTotals(); renderLog();
+  });
+} else {
+  document.getElementById("statusPill").textContent = "Gagal Konek Firebase";
+  document.getElementById("statusPill").className = "status-pill status-offline";
+  document.getElementById("tendaList").innerHTML = `<div class="empty">Tidak bisa konek ke server. Cek koneksi internet lalu buka ulang halaman ini.</div>`;
+}
+</script>
+</body>
+</html>
