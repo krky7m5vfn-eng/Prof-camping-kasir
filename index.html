@@ -9,7 +9,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Prof Camping">
-<meta name="theme-color" content="#1B1512">
+<meta name="theme-color" content="#FFFFFF">
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='36' fill='%231B1512'/%3E%3Cpath d='M90 40 L138 132 H42 Z' fill='none' stroke='%23F1E4D2' stroke-width='6' stroke-linejoin='round'/%3E%3Cpath d='M90 40 L138 132 H42 Z' fill='%23C2622A' opacity='0.25'/%3E%3Cpath d='M64 132 L90 84 L104 108 L116 92 L138 132' fill='none' stroke='%23F1E4D2' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='90' cy='150' r='4' fill='%23C2622A'/%3E%3C/svg%3E">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='36' fill='%231B1512'/%3E%3Cpath d='M90 40 L138 132 H42 Z' fill='none' stroke='%23F1E4D2' stroke-width='6'/%3E%3C/svg%3E">
 
@@ -20,9 +20,9 @@
 
 <style>
   :root{
-    --pine:#1B1512; --pine-light:#26201B; --canvas:#F1E4D2; --canvas-dim:#C7B49C;
-    --amber:#C2622A; --amber-bright:#F2903D; --brick:#B33B2E; --line:#453A31;
-    --ok:#7FA84F; --warn:#C9A227; --debt:#B33B2E;
+    --pine:#FFFFFF; --pine-light:#FFF3EA; --canvas:#2B1B10; --canvas-dim:#8C7263;
+    --amber:#C24A16; --amber-bright:#E85D1F; --brick:#C0392B; --line:#F0DDC9;
+    --ok:#4C8C3C; --warn:#C9922B; --debt:#C0392B;
     --chart-blue:#5B87A6; --chart-rose:#C97D6B; --chart-teal:#6E8F82;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -34,13 +34,13 @@
 
   .topo{position:fixed; inset:0; z-index:-1; pointer-events:none; background-color:var(--pine);
     background-image:
-      radial-gradient(circle at 20% 30%, transparent 0 60px, rgba(241,228,210,0.035) 61px, rgba(241,228,210,0.035) 63px, transparent 64px),
-      radial-gradient(circle at 20% 30%, transparent 0 100px, rgba(241,228,210,0.03) 101px, rgba(241,228,210,0.03) 103px, transparent 104px),
-      radial-gradient(circle at 85% 75%, transparent 0 90px, rgba(241,228,210,0.03) 91px, rgba(241,228,210,0.03) 93px, transparent 94px),
-      radial-gradient(circle at 85% 75%, transparent 0 140px, rgba(241,228,210,0.025) 141px, rgba(241,228,210,0.025) 143px, transparent 144px);
+      radial-gradient(circle at 20% 30%, transparent 0 60px, rgba(232,97,31,0.05) 61px, rgba(232,97,31,0.05) 63px, transparent 64px),
+      radial-gradient(circle at 20% 30%, transparent 0 100px, rgba(232,97,31,0.045) 101px, rgba(232,97,31,0.045) 103px, transparent 104px),
+      radial-gradient(circle at 85% 75%, transparent 0 90px, rgba(232,97,31,0.045) 91px, rgba(232,97,31,0.045) 93px, transparent 94px),
+      radial-gradient(circle at 85% 75%, transparent 0 140px, rgba(232,97,31,0.035) 141px, rgba(232,97,31,0.035) 143px, transparent 144px);
   }
 
-  header{position:sticky; top:0; z-index:20; background:linear-gradient(180deg, var(--pine) 70%, rgba(27,21,18,0.94)); border-bottom:1px solid var(--line); padding:18px 20px 0;}
+  header{position:sticky; top:0; z-index:20; background:linear-gradient(180deg, var(--pine) 70%, rgba(255,243,234,0.94)); border-bottom:1px solid var(--line); padding:18px 20px 0;}
   .brand{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;}
   .brand h1{font-size:clamp(26px,5vw,36px); font-weight:800; margin:0; color:var(--canvas); line-height:0.9;}
   .brand .tagline{font-size:11px; color:var(--amber-bright); font-family:'IBM Plex Mono',monospace; letter-spacing:0.08em; margin-top:4px;}
@@ -268,16 +268,16 @@
   .txn-top .cn{font-size:15.5px; font-weight:600;}
   .txn-top .cp{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--canvas-dim);}
   .badge{font-family:'IBM Plex Mono'; font-size:10px; padding:3px 9px; border-radius:999px; letter-spacing:0.04em; white-space:nowrap;}
-  .badge-aktif{background:rgba(127,168,79,0.18); color:#B9D699;}
+  .badge-aktif{background:rgba(127,168,79,0.18); color:#4C8C3C;}
   .badge-selesai{background:rgba(216,205,178,0.15); color:var(--canvas-dim);}
-  .badge-hutang{background:rgba(179,59,46,0.2); color:#E2917F;}
-  .badge-sebagian{background:rgba(201,162,39,0.2); color:#e3c464;}
-  .badge-lunas{background:rgba(127,168,79,0.18); color:#B9D699;}
+  .badge-hutang{background:rgba(179,59,46,0.2); color:#C0392B;}
+  .badge-sebagian{background:rgba(201,162,39,0.2); color:#A67C1E;}
+  .badge-lunas{background:rgba(127,168,79,0.18); color:#4C8C3C;}
   .badge-method{background:rgba(210,169,79,0.16); color:var(--amber-bright);}
   .badge-booking{background:rgba(210,169,79,0.2); color:var(--amber-bright);}
-  .badge-diaktifkan{background:rgba(127,168,79,0.18); color:#B9D699;}
-  .badge-batal{background:rgba(179,59,46,0.2); color:#E2917F;}
-  .badge-jaminan-tahan{background:rgba(179,59,46,0.22); color:#E2917F;}
+  .badge-diaktifkan{background:rgba(127,168,79,0.18); color:#4C8C3C;}
+  .badge-batal{background:rgba(179,59,46,0.2); color:#C0392B;}
+  .badge-jaminan-tahan{background:rgba(179,59,46,0.22); color:#C0392B;}
 
   .return-item-row{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid rgba(76,99,85,0.3);}
   .return-item-row:last-child{border-bottom:none;}
@@ -287,7 +287,7 @@
   .return-summary{font-family:'IBM Plex Mono'; font-size:12px; color:var(--canvas-dim); margin-top:10px; padding-top:10px; border-top:1px dashed var(--line);}
   .return-summary b{color:var(--amber-bright);}
   .dp-returned{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--ok); margin-top:2px;}
-  .badge-jaminan-ok{background:rgba(127,168,79,0.18); color:#B9D699;}
+  .badge-jaminan-ok{background:rgba(127,168,79,0.18); color:#4C8C3C;}
   .denda-row{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 10px; margin:4px 0; border-radius:8px; background:rgba(179,59,46,0.08); border:1px solid rgba(179,59,46,0.3);}
   .denda-row.paid{background:rgba(127,168,79,0.08); border-color:rgba(127,168,79,0.3);}
   .denda-row .dr-info{min-width:0; flex:1;}
@@ -314,8 +314,8 @@
   .stat-box{background:var(--pine-light); border:1px solid var(--line); border-radius:10px; padding:14px;}
   .stat-box .sb-label{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--canvas-dim); letter-spacing:0.06em; margin-bottom:6px; text-transform:uppercase;}
   .stat-box .sb-value{font-family:'Big Shoulders Display'; font-weight:800; font-size:19px; color:var(--amber-bright); word-break:break-word;}
-  .stat-box.debt .sb-value{color:#E2917F;}
-  .stat-box.ok .sb-value{color:#B9D699;}
+  .stat-box.debt .sb-value{color:#C0392B;}
+  .stat-box.ok .sb-value{color:#4C8C3C;}
 
   /* ===== DASHBOARD ===== */
   .kpi-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin:14px 0 22px;}
@@ -349,7 +349,7 @@
   .cat-highlight b{color:var(--amber-bright);}
   .bar-row{display:flex; align-items:center; gap:8px; margin:6px 0; font-family:'IBM Plex Mono'; font-size:11px;}
   .bar-row .bl{width:58px; flex:none; color:var(--canvas-dim); text-align:right;}
-  .bar-row .bt{flex:1; background:rgba(255,255,255,0.06); border-radius:6px; height:18px; position:relative; overflow:hidden;}
+  .bar-row .bt{flex:1; background:rgba(0,0,0,0.06); border-radius:6px; height:18px; position:relative; overflow:hidden;}
   .bar-row .bt .fill{background:var(--amber); height:100%; border-radius:6px; min-width:2px;}
   .bar-row .bv{width:92px; flex:none; text-align:right; color:var(--canvas-dim);}
   .prod-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid rgba(76,99,85,0.35); gap:10px;}
@@ -370,7 +370,7 @@
   .login-card .field{margin-bottom:12px;}
   .login-card .login-btn{width:100%; padding:14px; border:none; border-radius:12px; background:var(--amber); color:var(--pine); font-family:'Big Shoulders Display'; font-weight:800; font-size:16px; letter-spacing:0.03em; text-transform:uppercase; cursor:pointer; margin-top:6px;}
   .login-card .login-btn:disabled{opacity:0.5;}
-  .login-card .login-error{color:#E2917F; font-size:12.5px; font-family:'IBM Plex Mono'; margin-top:10px; min-height:16px;}
+  .login-card .login-error{color:#C0392B; font-size:12.5px; font-family:'IBM Plex Mono'; margin-top:10px; min-height:16px;}
   .logout-btn{background:none; border:1px solid var(--line); color:var(--canvas-dim); font-family:'IBM Plex Mono'; font-size:10.5px; padding:5px 10px; border-radius:999px; cursor:pointer; margin-top:4px;}
 
   /* ---- Bottom Nav ---- */
@@ -423,11 +423,11 @@
   .detail-title{font-size:19px; font-weight:800;}
   .detail-section{background:var(--pine-light); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:14px;}
   .detail-section-label{font-family:'IBM Plex Mono'; font-size:11px; letter-spacing:0.05em; color:var(--amber-bright); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;}
-  .detail-row{display:flex; justify-content:space-between; gap:12px; padding:6px 0; font-size:13.5px; border-bottom:1px solid rgba(255,255,255,0.05);}
+  .detail-row{display:flex; justify-content:space-between; gap:12px; padding:6px 0; font-size:13.5px; border-bottom:1px solid rgba(0,0,0,0.07);}
   .detail-row:last-child{border-bottom:none;}
   .detail-row .dl{color:var(--canvas-dim);}
   .detail-row .dv{text-align:right; font-weight:600;}
-  .detail-product-row{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05);}
+  .detail-product-row{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid rgba(0,0,0,0.07);}
   .detail-product-row:last-child{border-bottom:none;}
   .dp-name{font-size:13.5px; font-weight:600;}
   .dp-meta{font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); margin-top:3px;}
@@ -435,7 +435,7 @@
   .dp-total{font-weight:700; font-size:13.5px; margin-bottom:4px;}
   .dp-icons{display:flex; gap:10px; justify-content:flex-end;}
   .dp-icons button{background:none; border:none; cursor:pointer; font-size:14px; color:var(--canvas-dim); padding:2px;}
-  .dp-icons button.dp-del{color:#E2917F;}
+  .dp-icons button.dp-del{color:#C0392B;}
   .detail-total-row{display:flex; justify-content:space-between; font-size:16px; font-weight:800; padding-top:8px; border-top:1px solid var(--line); margin-top:6px;}
   .detail-actions-grid{display:flex; flex-wrap:wrap; gap:8px; margin-top:4px;}
   .receipt-btn{background:transparent; border:1px solid var(--amber); color:var(--amber-bright);}
@@ -444,17 +444,17 @@
   #receiptDrawer .drawer-body{background:var(--pine); padding-top:16px;}
   .receipt-stage{display:flex; justify-content:center; padding:6px 0 4px;}
   #receiptCapture{
-    width:340px; background:var(--canvas); color:var(--pine); padding:26px 22px 20px; position:relative;
+    width:340px; background:var(--pine); color:var(--canvas); padding:26px 22px 20px; position:relative;
     -webkit-mask-image:
       radial-gradient(circle 6px at left 12px top 0px, transparent 6px, black 6.5px),
       radial-gradient(circle 6px at right 12px top 0px, transparent 6px, black 6.5px);
   }
   #receiptCapture.mode-invoice{width:400px;}
-  #receiptCapture .rc-zig{position:absolute; left:0; right:0; height:9px; background:linear-gradient(135deg, var(--canvas) 50%, transparent 50%), linear-gradient(45deg, var(--canvas) 50%, transparent 50%); background-size:12px 12px; background-repeat:repeat-x;}
+  #receiptCapture .rc-zig{position:absolute; left:0; right:0; height:9px; background:linear-gradient(135deg, var(--pine) 50%, transparent 50%), linear-gradient(45deg, var(--pine) 50%, transparent 50%); background-size:12px 12px; background-repeat:repeat-x;}
   #receiptCapture .rc-zig.top{top:0;}
   #receiptCapture .rc-zig.bottom{bottom:0; transform:rotate(180deg);}
   #receiptCapture .rc-head{text-align:center; padding-bottom:12px; border-bottom:1.5px dashed var(--canvas-dim); margin-bottom:12px;}
-  #receiptCapture .rc-logo{width:42px; height:42px; border-radius:50%; background:var(--pine); color:var(--amber-bright); display:flex; align-items:center; justify-content:center; font-family:'Big Shoulders Display'; font-weight:800; font-size:17px; margin:0 auto 8px;}
+  #receiptCapture .rc-logo{width:42px; height:42px; border-radius:50%; background:var(--canvas); color:var(--amber-bright); display:flex; align-items:center; justify-content:center; font-family:'Big Shoulders Display'; font-weight:800; font-size:17px; margin:0 auto 8px;}
   #receiptCapture .rc-biz{font-family:'Big Shoulders Display'; font-weight:800; font-size:21px; text-transform:uppercase; margin:0; letter-spacing:0.01em;}
   #receiptCapture .rc-tag{font-family:'IBM Plex Mono'; font-size:10px; letter-spacing:0.08em; color:#7A6A57; margin:3px 0 0;}
   #receiptCapture .rc-doctype{font-family:'IBM Plex Mono'; font-size:11px; letter-spacing:0.14em; color:var(--brick); margin-top:9px; font-weight:600;}
@@ -604,7 +604,7 @@
       <button type="button" id="removeProdImageBtn" style="background:none; border:1px solid var(--brick); color:var(--brick); border-radius:8px; padding:6px 10px; font-family:'IBM Plex Mono'; font-size:11px; cursor:pointer;">Hapus Foto</button>
     </div>
     <div id="newProdImageStatus" style="font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); margin-top:6px;"></div>
-    <div id="newProdError" style="color:#E2917F; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
+    <div id="newProdError" style="color:#C0392B; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
   </div>
   <div class="drawer-foot">
     <button class="save-btn" id="saveProductBtn">Simpan Produk</button>
@@ -654,7 +654,7 @@
     <input class="field" id="dendaReason" placeholder="Contoh: Denda telat kembali 2 hari / Tenda rusak / Kompor hilang">
     <div class="section-label">Nominal Denda (Rp)</div>
     <input class="field" type="number" min="0" id="dendaAmount" placeholder="Contoh: 50000">
-    <div id="dendaError" style="color:#E2917F; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
+    <div id="dendaError" style="color:#C0392B; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
   </div>
   <div class="drawer-foot">
     <button class="save-btn" id="saveDendaBtn">Simpan Denda</button>
@@ -683,7 +683,7 @@
     <input class="field" type="date" id="bayarDateInput">
     <div class="section-label">Catatan (opsional)</div>
     <input class="field" id="bayarNote" placeholder="Contoh: DP pertama / Pelunasan sisa">
-    <div id="bayarError" style="color:#E2917F; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
+    <div id="bayarError" style="color:#C0392B; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
   </div>
   <div class="drawer-foot">
     <button class="save-btn" id="saveBayarBtn">Simpan Pembayaran</button>
@@ -1275,6 +1275,7 @@ function freshDraft(){
     mode: "transaksi", // for brand-new entries only: 'transaksi' | 'booking'
     customerMode: "search", // 'search' | 'new'
     selectedCustomer: null, // {id,name,phone}
+    selectedCustName: null, // nama yang ditampilkan/dipakai untuk transaksi/booking ini saja (boleh beda dari data pelanggan tersimpan)
     newName: "", newPhone: "",
     editCustName: "", editCustPhone: "", // used only when editingId is set
     durationDays: 1,
@@ -1293,6 +1294,27 @@ let editPrevCart = null, editPrevDraft = null; // backup so editing can be cance
 let activeCat = "Semua", query = "", activeTab = "home", txnFilter = "Semua", bookingFilter = "Semua";
 let catalogCols = load("basecamp_catalog_cols", "auto"); // "auto" atau angka 2-8 (jumlah produk per baris, dipilih pengguna)
 let txnQuery = "", txnDateMode = "semua", txnDateStart = todayISO(), txnDateEnd = todayISO(); // pencarian & filter periode transaksi
+let txnMethodFilter = "semua"; // filter metode bayar (semua/cash/qris/transfer) di tab Transaksi
+// Menjumlahkan nominal yang dibayar dengan metode tertentu untuk 1 transaksi, dibatasi ke rentang tanggal
+// PEMBAYARAN (bukan tanggal mulai sewa) sesuai txnDateMode yang aktif — supaya "Cash hari ini" berarti
+// uang cash yang BENERAN diterima hari ini, meski transaksinya sendiri mulai sewa dari hari lain
+// (mis. transaksi 3 hari lalu tapi baru dilunasi cash hari ini tetap kehitung).
+function methodAmountForTxn(t, method){
+  let sum = 0;
+  (t.paymentHistory||[]).forEach(h=>{
+    if(h.method!==method) return;
+    const d = (h.at||"").slice(0,10);
+    if(txnDateMode==="hari_ini" && d!==todayISO()) return;
+    if(txnDateMode==="kemarin" && d!==addDays(todayISO(),-1)) return;
+    if(txnDateMode==="custom" && txnDateStart && txnDateEnd){
+      const start = txnDateStart<=txnDateEnd ? txnDateStart : txnDateEnd;
+      const end = txnDateStart<=txnDateEnd ? txnDateEnd : txnDateStart;
+      if(d<start || d>end) return;
+    }
+    sum += h.amount;
+  });
+  return sum;
+}
 let txnDetailId = null; // id transaksi yang lagi dibuka di layar Detail Transaksi (null = tampil daftar)
 let quickSelectedCustomer = null; // pelanggan yang dipilih lewat autocomplete di tab Input Cepat
 
@@ -1867,9 +1889,12 @@ function renderCheckout(){
       <input class="field" id="editCustName" placeholder="Nama pelanggan" value="${draft.editCustName||''}">
       <input class="field" id="editCustPhone" placeholder="Nomor WhatsApp (62…)" value="${draft.editCustPhone||''}" inputmode="tel">`;
   } else if(draft.selectedCustomer){
-    custHtml = `<div class="selected-cust">
-      <div><div class="cn">${draft.selectedCustomer.name}</div><div class="cp">${draft.selectedCustomer.phone}</div></div>
-      <button id="changeCust">GANTI</button>
+    custHtml = `<div class="selected-cust" style="flex-direction:column; align-items:stretch; gap:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="cp">${draft.selectedCustomer.phone}</div>
+        <button id="changeCust">GANTI</button>
+      </div>
+      <input class="field" id="selectedCustName" style="margin:0;" placeholder="Nama pelanggan" value="${draft.selectedCustName!=null ? draft.selectedCustName : draft.selectedCustomer.name}">
     </div>`;
   } else {
     custHtml = `
@@ -1947,6 +1972,7 @@ function renderCheckout(){
       <div class="date-summary">Subtotal: <b>${fmt(periodSubtotal)}</b><br>Diskon: <b>−${fmt(discountAmount)}</b></div>
     ` : ""}
 
+    ${!isBookingFlow ? `
     <div class="section-label">Jaminan</div>
     <div class="dur-chips">${jamHtml}</div>
     ${draft.jaminan.type==="lain" ? `
@@ -1955,6 +1981,7 @@ function renderCheckout(){
     ${draft.jaminan.type==="ktp" || draft.jaminan.type==="sim" ? `
       <input class="field" id="jamNote" placeholder="Nomor ${draft.jaminan.type.toUpperCase()} (opsional)" value="${draft.jaminan.note||''}">
     ` : ""}
+    ` : `<div style="margin:6px 0 14px; font-size:12.5px; color:var(--canvas-dim); line-height:1.5;">Jaminan (KTP/SIM/dsb) diisi nanti saat barang benar-benar diambil/diaktifkan, bukan saat booking dibuat.</div>`}
 
     ${isBookingFlow ? `
       <div class="section-label">Uang Muka (DP)</div>
@@ -2029,7 +2056,9 @@ function renderCheckout(){
     });
   });
   const changeCustBtn = document.getElementById("changeCust");
-  if(changeCustBtn) changeCustBtn.addEventListener("click", ()=>{ draft.selectedCustomer=null; renderCheckout(); });
+  if(changeCustBtn) changeCustBtn.addEventListener("click", ()=>{ draft.selectedCustomer=null; draft.selectedCustName=null; renderCheckout(); });
+  const selectedCustNameInput = document.getElementById("selectedCustName");
+  if(selectedCustNameInput) selectedCustNameInput.addEventListener("input", e=>{ draft.selectedCustName = e.target.value; });
 
   checkoutBody.querySelectorAll("[data-mode]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ draft.customerMode = btn.dataset.mode; renderCheckout(); });
@@ -2039,6 +2068,7 @@ function renderCheckout(){
   checkoutBody.querySelectorAll(".cust-row").forEach(row=>{
     row.addEventListener("click", ()=>{
       draft.selectedCustomer = customers.find(c=>c.id===row.dataset.id);
+      draft.selectedCustName = draft.selectedCustomer ? draft.selectedCustomer.name : null;
       renderCheckout();
     });
   });
@@ -2272,6 +2302,10 @@ saveBtn.addEventListener("click", async ()=>{
       customer = { id: uid(), name: draft.newName.trim(), phone: draft.newPhone.trim().replace(/[^0-9]/g,"") };
       customers.push(customer);
       save("basecamp_customers", customers);
+    } else {
+      // Nama boleh diedit khusus untuk booking ini saja, tidak perlu ikut/mengubah nama yang tersimpan di data pelanggan
+      const overrideName = (draft.selectedCustName||"").trim();
+      if(overrideName && overrideName!==customer.name) customer = { ...customer, name: overrideName };
     }
     const booking = {
       id: uid(),
@@ -2301,6 +2335,10 @@ saveBtn.addEventListener("click", async ()=>{
     customer = { id: uid(), name: draft.newName.trim(), phone: draft.newPhone.trim().replace(/[^0-9]/g,"") };
     customers.push(customer);
     save("basecamp_customers", customers);
+  } else {
+    // Nama boleh diedit khusus untuk transaksi ini saja, tidak perlu ikut/mengubah nama yang tersimpan di data pelanggan
+    const overrideName = (draft.selectedCustName||"").trim();
+    if(overrideName && overrideName!==customer.name) customer = { ...customer, name: overrideName };
   }
 
   const txn = {
@@ -2355,18 +2393,26 @@ function renderTransaksi(){
     );
   }
 
-  // filter periode, berdasarkan tanggal mulai sewa — bisa digabung dengan pencarian & status di atas
-  if(txnDateMode==="hari_ini"){
-    const today = todayISO();
-    list = list.filter(t=> txnLocalDate(t)===today);
-  } else if(txnDateMode==="kemarin"){
-    const yesterday = addDays(todayISO(),-1);
-    list = list.filter(t=> txnLocalDate(t)===yesterday);
-  } else if(txnDateMode==="custom" && txnDateStart && txnDateEnd){
-    const start = txnDateStart<=txnDateEnd ? txnDateStart : txnDateEnd;
-    const end = txnDateStart<=txnDateEnd ? txnDateEnd : txnDateStart;
-    list = list.filter(t=>{ const d = txnLocalDate(t); return d>=start && d<=end; });
+  // filter periode: kalau TIDAK sedang filter metode bayar, berdasarkan tanggal mulai sewa (seperti biasa).
+  // Kalau SEDANG filter metode bayar (cash/qris/transfer), tanggalnya dialihkan ke tanggal PEMBAYARAN
+  // diterima (lihat methodAmountForTxn) — supaya "Cash + Hari Ini" berarti cash yang diterima hari ini.
+  if(txnMethodFilter==="semua"){
+    if(txnDateMode==="hari_ini"){
+      const today = todayISO();
+      list = list.filter(t=> txnLocalDate(t)===today);
+    } else if(txnDateMode==="kemarin"){
+      const yesterday = addDays(todayISO(),-1);
+      list = list.filter(t=> txnLocalDate(t)===yesterday);
+    } else if(txnDateMode==="custom" && txnDateStart && txnDateEnd){
+      const start = txnDateStart<=txnDateEnd ? txnDateStart : txnDateEnd;
+      const end = txnDateStart<=txnDateEnd ? txnDateEnd : txnDateStart;
+      list = list.filter(t=>{ const d = txnLocalDate(t); return d>=start && d<=end; });
+    }
+  } else {
+    list = list.filter(t=> methodAmountForTxn(t, txnMethodFilter) > 0);
   }
+  const methodLabels = { cash:"Cash", qris:"QRIS", transfer:"Transfer" };
+  const methodFilterTotal = txnMethodFilter!=="semua" ? list.reduce((s,t)=>s+methodAmountForTxn(t, txnMethodFilter), 0) : null;
 
   const active = document.activeElement;
   const restoreFocus = active && active.id==="txnSearchInput";
@@ -2390,6 +2436,13 @@ function renderTransaksi(){
         <input class="field" type="date" id="txnDateEndInput" value="${txnDateEnd}">
       </div>
     ` : ""}
+    <div class="dur-chips" style="margin-top:8px">
+      <button class="dur-chip ${txnMethodFilter==='semua'?'active':''}" data-tmf="semua">Semua Metode</button>
+      <button class="dur-chip ${txnMethodFilter==='cash'?'active':''}" data-tmf="cash">Cash</button>
+      <button class="dur-chip ${txnMethodFilter==='qris'?'active':''}" data-tmf="qris">QRIS</button>
+      <button class="dur-chip ${txnMethodFilter==='transfer'?'active':''}" data-tmf="transfer">Transfer</button>
+    </div>
+    ${txnMethodFilter!=="semua" ? `<div class="date-summary" style="margin:8px 0 0;">Total ${methodLabels[txnMethodFilter]} pada periode ini: <b>${fmt(methodFilterTotal)}</b> dari ${list.length} transaksi</div>` : ""}
     <div class="txn-filter-row">${filters.map(f=>{
       const cnt = f==='Hampir Selesai' ? soonCount : f==='Terlambat' ? lateCount : f==='Terhapus' ? deletedTransactions.length : null;
       return `<button class="chip ${txnFilter===f?'active':''} ${f==='Terlambat'?'late':''}" data-f="${f}">${cnt!=null && cnt>0 ? `<span class="cnt">${cnt}</span>` : ""}${f.toUpperCase()}</button>`;
@@ -2397,11 +2450,13 @@ function renderTransaksi(){
   `;
 
   if(list.length===0){
-    const noMatchReason = (txnQuery.trim() || txnDateMode!=="semua") ? "Tidak ada transaksi yang cocok dengan pencarian/filter ini." : (isDeletedView ? "Belum ada transaksi yang dihapus." : "Belum ada transaksi"+(txnFilter!=='Semua' ? " dengan status ini." : "."));
+    const noMatchReason = (txnQuery.trim() || txnDateMode!=="semua" || txnMethodFilter!=="semua") ? "Tidak ada transaksi yang cocok dengan pencarian/filter ini." : (isDeletedView ? "Belum ada transaksi yang dihapus." : "Belum ada transaksi"+(txnFilter!=='Semua' ? " dengan status ini." : "."));
     html += `<div class="empty">${noMatchReason}</div>`;
   } else {
     const payLabels = { hutang:"Belum Bayar", sebagian:"Sebagian", lunas:"Lunas" };
-    html += list.map(t=>`
+    html += list.map(t=>{
+      const methodAmt = txnMethodFilter!=="semua" ? methodAmountForTxn(t, txnMethodFilter) : null;
+      return `
       <div class="txn-list-card" data-open-detail="${t.id}">
         <div class="tlc-date">${fmtDateFull(t.startDate)} – ${fmtDateFull(t.endDate)}</div>
         <div class="tlc-mid">
@@ -2411,12 +2466,13 @@ function renderTransaksi(){
             <div class="tlc-name">${custDot(t.customer.name)}<span>${t.customer.name || 'Tanpa Nama'}</span></div>
           </div>
           <div class="tlc-right">
-            <div class="tlc-total">${fmt(t.total)}</div>
+            <div class="tlc-total">${methodAmt!=null ? fmt(methodAmt) : fmt(t.total)}</div>
+            ${methodAmt!=null && methodAmt<t.total ? `<div style="font-size:10.5px;color:var(--canvas-dim);">dari total ${fmt(t.total)}</div>` : ""}
             <span class="badge badge-${t.payment.status}">${payLabels[t.payment.status]}</span>
           </div>
         </div>
       </div>
-    `).join("");
+    `;}).join("");
   }
   transaksiEl.innerHTML = html;
 
@@ -2430,6 +2486,9 @@ function renderTransaksi(){
   }
   transaksiEl.querySelectorAll("[data-tdm]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ txnDateMode = btn.dataset.tdm; renderTransaksi(); });
+  });
+  transaksiEl.querySelectorAll("[data-tmf]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ txnMethodFilter = btn.dataset.tmf; renderTransaksi(); });
   });
   const txnDateStartInput = document.getElementById("txnDateStartInput");
   if(txnDateStartInput) txnDateStartInput.addEventListener("change", e=>{ txnDateStart = e.target.value || todayISO(); renderTransaksi(); });
@@ -2483,7 +2542,7 @@ function renderTransaksiDetail(){
       <div class="dv" style="display:flex; align-items:center; gap:8px; justify-content:flex-end;">
         ${fmt(d.amount)}
         ${!isDeletedView ? `<button class="toggle-denda-paid" data-txn="${t.id}" data-denda="${d.id}" style="background:none;border:1px solid var(--line);border-radius:6px;color:var(--canvas-dim);font-size:10.5px;padding:3px 7px;cursor:pointer;">${d.paid?'Batal':'Lunas'}</button>
-        <button class="del-denda" data-txn="${t.id}" data-denda="${d.id}" style="background:none;border:none;color:#E2917F;cursor:pointer;">🗑</button>` : ""}
+        <button class="del-denda" data-txn="${t.id}" data-denda="${d.id}" style="background:none;border:none;color:#C0392B;cursor:pointer;">🗑</button>` : ""}
       </div>
     </div>
   `).join("") : `<div class="detail-row"><div class="dl">Belum ada biaya tambahan / denda.</div></div>`;
@@ -2493,7 +2552,7 @@ function renderTransaksiDetail(){
       <div class="dl">${methodLabel(h.method)}<br><span style="font-family:'IBM Plex Mono'; font-size:10.5px;">${fmtDateFull(localDateFromISO(h.at))}</span></div>
       <div class="dv" style="display:flex; align-items:center; gap:8px; justify-content:flex-end;">
         ${fmt(h.amount)}
-        ${!isDeletedView ? `<button class="del-bayar" data-txn="${t.id}" data-bayar="${h.id}" style="background:none;border:none;color:#E2917F;cursor:pointer;">🗑</button>` : ""}
+        ${!isDeletedView ? `<button class="del-bayar" data-txn="${t.id}" data-bayar="${h.id}" style="background:none;border:none;color:#C0392B;cursor:pointer;">🗑</button>` : ""}
       </div>
     </div>
   `).join("") : `<div class="detail-row"><div class="dl">Belum ada riwayat pembayaran.</div></div>`;
@@ -2521,11 +2580,12 @@ function renderTransaksiDetail(){
         <option value="sebagian" ${t.payment.status==='sebagian'?'selected':''}>Sebagian</option>
         <option value="lunas" ${t.payment.status==='lunas'?'selected':''}>Lunas</option>
       </select>
+      ${t.payment.status!=='hutang' ? `
       <select class="method-select" data-id="${t.id}">
         <option value="cash" ${(!t.payment.method||t.payment.method==='cash')?'selected':''}>Cash</option>
         <option value="qris" ${t.payment.method==='qris'?'selected':''}>QRIS</option>
         <option value="transfer" ${t.payment.method==='transfer'?'selected':''}>Transfer</option>
-      </select>
+      </select>` : ''}
     </div>
   `;
 
@@ -2557,7 +2617,7 @@ function renderTransaksiDetail(){
     </div>
 
     <div class="detail-section">
-      <div class="detail-section-label">BIAYA TAMBAHAN / DENDA${dendaUnpaidTotal>0 ? ` <span style="color:#E2917F">· belum lunas ${fmt(dendaUnpaidTotal)}</span>` : ""}</div>
+      <div class="detail-section-label">BIAYA TAMBAHAN / DENDA${dendaUnpaidTotal>0 ? ` <span style="color:#C0392B">· belum lunas ${fmt(dendaUnpaidTotal)}</span>` : ""}</div>
       ${dendaHtml}
     </div>
 
@@ -2598,9 +2658,25 @@ function renderTransaksiDetail(){
   transaksiEl.querySelectorAll(".pay-select").forEach(sel=>{
     sel.addEventListener("change", ()=>{
       const tx = transactions.find(x=>x.id===sel.dataset.id);
-      tx.payment.status = sel.value;
-      if(sel.value==="lunas") tx.payment.paidAmount = tx.total;
-      if(sel.value==="hutang") tx.payment.paidAmount = 0;
+      const newStatus = sel.value;
+      if(newStatus==="hutang"){
+        tx.payment.status = "hutang";
+        tx.payment.paidAmount = 0;
+      } else if(newStatus==="lunas"){
+        // Kalau dipilih "Lunas" langsung dari dropdown ini (bukan lewat "+ Bayar"), catat selisih yang
+        // belum ada di riwayat sebagai 1 entri pembayaran, supaya Kas Harian & Laporan tetap akurat
+        // dan tidak ada lagi kasus "status Lunas tapi riwayat pembayaran kosong".
+        if(!tx.paymentHistory) tx.paymentHistory = [];
+        const alreadyLogged = tx.paymentHistory.reduce((s,h)=>s+h.amount, 0);
+        const unlogged = tx.total - alreadyLogged;
+        if(unlogged>0){
+          tx.paymentHistory.push({ id: uid(), amount: unlogged, method: tx.payment.method||"cash", note: "Ditandai Lunas manual", at: new Date().toISOString() });
+        }
+        tx.payment.paidAmount = tx.total;
+        tx.payment.status = "lunas";
+      } else {
+        tx.payment.status = newStatus;
+      }
       save("basecamp_transactions", transactions);
       renderTransaksiDetail();
     });
@@ -3598,6 +3674,7 @@ function renderQuickInput(){
     if(cartEntries().length===0) return;
     if(quickSelectedCustomer){
       draft.selectedCustomer = quickSelectedCustomer;
+      draft.selectedCustName = quickSelectedCustomer.name;
       draft.customerMode = "search";
     } else {
       const typedName = qiCustInput.value.trim();
