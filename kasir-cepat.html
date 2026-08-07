@@ -482,6 +482,14 @@ function renderChips(){
     btn.addEventListener("click", ()=>{ activeCat = btn.dataset.cat; renderProdList(); renderChips(); });
   });
 }
+// Menggambar ulang daftar produk (innerHTML) bikin tombol yang baru disentuh "hilang lalu muncul lagi"
+// sebagai elemen baru — di iPhone/Safari ini suka memicu scroll otomatis balik ke atas halaman.
+// Fungsi ini menyimpan posisi scroll dulu, jalankan fn (render ulang), lalu kembalikan posisinya persis semula.
+function preserveScroll(fn){
+  const y = window.scrollY;
+  fn();
+  window.scrollTo(0, y);
+}
 function sortedItems(items){
   const catRank = c => c==="Tenda" ? 0 : 1;
   return [...items].sort((a,b)=>{
@@ -525,7 +533,7 @@ function renderProdList(){
       let qty = cart[pid] || 0;
       qty = btn.dataset.op==="+" ? qty+1 : Math.max(0, qty-1);
       if(qty<=0) delete cart[pid]; else cart[pid] = qty;
-      renderProdList(); renderCartSummary(); updatePayDefaults();
+      preserveScroll(()=>{ renderProdList(); renderCartSummary(); updatePayDefaults(); });
     });
   });
 }
@@ -546,7 +554,7 @@ document.getElementById("quickGasBtn").addEventListener("click", ()=>{
   const gasProduct = allProducts().find(p=>p.name==="Sewa Tabung + Isi Gas");
   if(!gasProduct) return;
   cart[gasProduct.id] = (cart[gasProduct.id]||0) + 1;
-  renderProdList(); renderCartSummary(); updatePayDefaults();
+  preserveScroll(()=>{ renderProdList(); renderCartSummary(); updatePayDefaults(); });
 });
 document.getElementById("searchInput").addEventListener("input", e=>{ query = e.target.value; renderProdList(); });
 
