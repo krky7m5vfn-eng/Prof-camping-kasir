@@ -675,6 +675,12 @@
       <button class="dur-chip" data-bm="qris">QRIS</button>
       <button class="dur-chip" data-bm="transfer">Transfer</button>
     </div>
+    <div class="section-label">Tanggal Diterima</div>
+    <div class="dur-chips" style="margin-bottom:6px;">
+      <button class="dur-chip active" data-bayardate="today">Hari Ini</button>
+      <button class="dur-chip" data-bayardate="yesterday">Kemarin</button>
+    </div>
+    <input class="field" type="date" id="bayarDateInput">
     <div class="section-label">Catatan (opsional)</div>
     <input class="field" id="bayarNote" placeholder="Contoh: DP pertama / Pelunasan sisa">
     <div id="bayarError" style="color:#E2917F; font-size:12px; font-family:'IBM Plex Mono'; margin-top:6px;"></div>
@@ -801,10 +807,32 @@ const FIRESTORE_SYNCED_KEYS = [
   "basecamp_kas_harian"
 ];
 
+// ================= BACKUP / EXPORT DATA MANUAL =================
+// Tombol "Backup Data" di menu Home. Menggabungkan semua data penting (pelanggan, transaksi,
+// transaksi terhapus, booking, produk custom, kas harian, dst.) jadi satu file .json yang bisa
+// diunduh & disimpan sendiri (Google Drive/email/dsb.) sebagai cadangan di luar Firebase.
+function downloadBackup(){
+  const backup = { exportedAt: new Date().toISOString(), data: {} };
+  FIRESTORE_SYNCED_KEYS.forEach(key=>{ backup.data[key] = load(key, null); });
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `basecamp-backup-${todayISO()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 // ================= KONEKSI KE GOOGLE SHEETS (rekap transaksi otomatis) =================
 // Isi dengan URL "Web app" hasil deploy Google Apps Script (lihat panduan setup dari Claude).
 // Selama masih "GANTI_DENGAN_URL_APPS_SCRIPT", fitur ini otomatis nonaktif dan tidak memengaruhi aplikasi sama sekali.
 const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbxygMPcwZryH_gp_HOL7KRhqx2wMS3tVWECRecZYUdZsU7fl0aiaB4S8unVz80dLkxd/exec";
+// Kata sandi sederhana supaya orang lain yang kebetulan tahu URL Apps Script di atas tidak bisa
+// kirim data sampah ke Google Sheets kamu. Nilai ini HARUS SAMA PERSIS dengan yang dicek di kode
+// Apps Script (lihat catatan setup dari Claude untuk kode doPost()-nya).
+const GOOGLE_SHEETS_SECRET = "GANTI_DENGAN_KATA_SANDI_RAHASIA";
 const googleSheetsEnabled = GOOGLE_SHEETS_URL && !GOOGLE_SHEETS_URL.startsWith("GANTI_");
 
 function syncTransactionsToSheet(list){
@@ -835,7 +863,7 @@ function syncTransactionsToSheet(list){
     method: "POST",
     mode: "no-cors",
     headers: { "Content-Type": "text/plain" },
-    body: JSON.stringify({ transactions: rows })
+    body: JSON.stringify({ secret: GOOGLE_SHEETS_SECRET, transactions: rows })
   }).catch(err=>console.error("Gagal sinkron ke Google Sheets:", err));
 }
 const syncTransactionsToSheetDebounced = debounce(syncTransactionsToSheet, 800);
@@ -1119,8 +1147,11 @@ function rentalCount(product){
 }
 
 // ================= KAS HARIAN (LACI) =================
-// Disimpan per tanggal (key "YYYY-MM-DD"): { modalAwal, pengeluaran:[{id,desc,amount,at}], ditutup, uangFisik, selisih, closedAt }
-// Uang Masuk dihitung OTOMATIS dari t.paymentHistory (semua transaksi) yang method="cash" & tanggalnya = tanggal terpilih.
+// Disimpan per tanggal (key "YYYY-MM-DD"): { modalAwal, pengeluaran:[{id,desc,amount,at}], ditutup, uangFisik, selisih, closedAt,
+//   cashInAtClose, pengeluaranAtClose } — dua field terakhir adalah snapshot Uang Masuk & Pengeluaran PERSIS saat kasir ditutup,
+// dipakai untuk mendeteksi kalau data berubah lagi setelah kasir ditutup (lihat renderKas: banner "Data Berubah Sejak Kasir Ditutup").
+// Uang Masuk dihitung OTOMATIS dari t.paymentHistory (semua transaksi) yang method="cash" & tanggalnya = tanggal terpilih,
+// DITAMBAH denda yang sudah ditandai Lunas (dianggap dibayar cash saat itu juga, karena drawer denda belum punya pilihan metode bayar).
 // Catatan: DP booking yang dibuat langsung sebagai "booking" (bukan transaksi aktif) belum masuk hitungan ini,
 // karena baru tercatat sebagai pemasukan tunai saat booking itu diaktifkan jadi transaksi.
 let kasHarian = load("basecamp_kas_harian", {});
@@ -1138,6 +1169,9 @@ function cashInForDate(date){
   transactions.forEach(t=>{
     (t.paymentHistory||[]).forEach(h=>{
       if(h.method==="cash" && (h.at||"").slice(0,10)===date) total += h.amount;
+    });
+    (t.dendaList||[]).forEach(d=>{
+      if(d.paid && d.paidMethod==="cash" && (d.paidAt||"").slice(0,10)===date) total += d.amount;
     });
   });
   return total;
@@ -1892,6 +1926,10 @@ function renderCheckout(){
     ${custHtml}
 
     <div class="section-label">Jangka Waktu Sewa</div>
+    <div class="dur-chips" style="margin-bottom:6px;">
+      <button class="dur-chip ${draft.startDate===todayISO()?'active':''}" data-quickdate="today">Hari Ini</button>
+      <button class="dur-chip ${draft.startDate===addDays(todayISO(),-1)?'active':''}" data-quickdate="yesterday">Kemarin</button>
+    </div>
     <input class="field" type="date" id="startDate" value="${draft.startDate}">
     <div class="dur-chips">${durHtml}</div>
     <div class="date-summary">
@@ -2013,6 +2051,12 @@ function renderCheckout(){
 
   const startDateEl = document.getElementById("startDate");
   if(startDateEl) startDateEl.addEventListener("change", e=>{ draft.startDate = e.target.value || todayISO(); renderCheckout(); });
+  checkoutBody.querySelectorAll("[data-quickdate]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      draft.startDate = btn.dataset.quickdate==="yesterday" ? addDays(todayISO(),-1) : todayISO();
+      renderCheckout();
+    });
+  });
   checkoutBody.querySelectorAll("[data-d]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ draft.durationDays = parseInt(btn.dataset.d); renderCheckout(); });
   });
@@ -2116,6 +2160,20 @@ saveBtn.addEventListener("click", async ()=>{
         }
         return { name:e.product.name, price:e.product.price, qty:e.qty, returnedQty };
       });
+      // Kalau tanggal mulai dikoreksi (misal salah input tanggal, seharusnya kemarin),
+      // ikut geser tanggal pembayaran cash yang tadinya tercatat di tanggal lama (tanggal salah)
+      // supaya Uang Masuk di Kas Harian pindah mengikuti ke tanggal yang benar, bukan hilang/nyangkut
+      // di kas harian tanggal yang salah.
+      if(t.startDate !== draft.startDate){
+        const oldStart = t.startDate, newStart = draft.startDate;
+        (t.paymentHistory||[]).forEach(h=>{
+          const hDatePart = (h.at||"").slice(0,10);
+          if(hDatePart===oldStart){
+            const timePart = (h.at||"").slice(10); // "THH:MM:SS.sssZ"
+            h.at = newStart + timePart;
+          }
+        });
+      }
       t.startDate = draft.startDate;
       t.endDate = addDays(draft.startDate, draft.durationDays);
       t.subtotal = periodSubtotal;
@@ -2598,6 +2656,8 @@ function renderTransaksiDetail(){
       const d = (tx.dendaList||[]).find(x=>x.id===btn.dataset.denda);
       if(!d) return;
       d.paid = !d.paid;
+      if(d.paid){ d.paidAt = new Date().toISOString(); d.paidMethod = "cash"; }
+      else { d.paidAt = null; d.paidMethod = null; }
       save("basecamp_transactions", transactions);
       renderTransaksiDetail();
     });
@@ -2705,18 +2765,23 @@ const bayarInfo = document.getElementById("bayarInfo");
 const bayarAmountInput = document.getElementById("bayarAmount");
 const bayarNoteInput = document.getElementById("bayarNote");
 const bayarError = document.getElementById("bayarError");
+const bayarDateInput = document.getElementById("bayarDateInput");
 let bayarTargetTxnId = null;
 let bayarMethod = "cash";
+let bayarDate = todayISO();
 
 function openBayarDrawer(txnId){
   const t = transactions.find(x=>x.id===txnId);
   if(!t) return;
   bayarTargetTxnId = txnId;
   bayarMethod = "cash";
+  bayarDate = todayISO();
   bayarAmountInput.value = "";
   bayarNoteInput.value = "";
   bayarError.textContent = "";
+  bayarDateInput.value = bayarDate;
   bayarDrawer.querySelectorAll("[data-bm]").forEach(b=>b.classList.toggle("active", b.dataset.bm==="cash"));
+  bayarDrawer.querySelectorAll("[data-bayardate]").forEach(b=>b.classList.toggle("active", b.dataset.bayardate==="today"));
   const sisa = Math.max(0, t.total - (t.payment.paidAmount||0));
   bayarInfo.innerHTML = `Total sewa: <b>${fmt(t.total)}</b><br>Sudah dibayar: <b>${fmt(t.payment.paidAmount||0)}</b><br>Sisa tagihan: <b>${fmt(sisa)}</b>`;
   bayarOverlay.classList.add("open"); bayarDrawer.classList.add("open");
@@ -2730,6 +2795,17 @@ bayarDrawer.querySelectorAll("[data-bm]").forEach(btn=>{
     bayarMethod = btn.dataset.bm;
     bayarDrawer.querySelectorAll("[data-bm]").forEach(b=>b.classList.toggle("active", b===btn));
   });
+});
+bayarDrawer.querySelectorAll("[data-bayardate]").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    bayarDate = btn.dataset.bayardate==="yesterday" ? addDays(todayISO(),-1) : todayISO();
+    bayarDateInput.value = bayarDate;
+    bayarDrawer.querySelectorAll("[data-bayardate]").forEach(b=>b.classList.toggle("active", b===btn));
+  });
+});
+bayarDateInput.addEventListener("change", e=>{
+  bayarDate = e.target.value || todayISO();
+  bayarDrawer.querySelectorAll("[data-bayardate]").forEach(b=>b.classList.remove("active"));
 });
 document.getElementById("saveBayarBtn").addEventListener("click", ()=>{
   const amount = parseInt(bayarAmountInput.value);
@@ -2746,7 +2822,10 @@ document.getElementById("saveBayarBtn").addEventListener("click", ()=>{
     if(unlogged>0){
       t.paymentHistory.push({ id: uid(), amount: unlogged, method: t.payment.method||"cash", note: "Pembayaran sebelumnya", at: t.createdAt||new Date().toISOString() });
     }
-    t.paymentHistory.push({ id: uid(), amount, method: bayarMethod, note: bayarNoteInput.value.trim(), at: new Date().toISOString() });
+    // Tanggal diterima dipilih dari drawer (default hari ini), jamnya tetap pakai waktu sekarang saat disimpan
+    const timePart = new Date().toISOString().slice(10); // "THH:MM:SS.sssZ"
+    const paidAt = (bayarDate || todayISO()) + timePart;
+    t.paymentHistory.push({ id: uid(), amount, method: bayarMethod, note: bayarNoteInput.value.trim(), at: paidAt });
     recomputePaymentFromHistory(t);
     save("basecamp_transactions", transactions);
   }
@@ -3634,7 +3713,16 @@ function renderKas(){
   if(k.ditutup){
     const selisih = k.selisih||0;
     const selisihCls = selisih===0 ? "ok" : selisih>0 ? "warn" : "debt";
+    // Cek apakah ada perubahan data SETELAH kasir ditutup (misal transaksi diedit, pembayaran/denda
+    // dihapus atau tanggalnya digeser) — kalau beda dari snapshot saat tutup kasir, angka yang tampil
+    // sekarang (live) sudah tidak sama dengan Selisih yang dihitung & dibekukan waktu itu.
+    const drifted = k.cashInAtClose!==undefined && (k.cashInAtClose!==cashIn || k.pengeluaranAtClose!==pengeluaranTotal);
     html += `
+      ${drifted ? `
+      <div class="kas-summary-card" style="border-color:var(--warn); margin-bottom:10px;">
+        <div class="kas-closed-tag" style="color:var(--warn);">⚠️ Data Berubah Sejak Kasir Ditutup</div>
+        <div class="hint" style="margin:4px 0 8px;">Uang Masuk/Pengeluaran sekarang (${fmt(cashIn)} / −${fmt(pengeluaranTotal)}) beda dari saat kasir ditutup (${fmt(k.cashInAtClose)} / −${fmt(k.pengeluaranAtClose)}). Kemungkinan ada transaksi/pembayaran/denda yang diedit, dihapus, atau digeser tanggalnya setelah kasir ini ditutup. Selisih di bawah masih angka LAMA — buka lagi kasir lalu tutup ulang supaya selisihnya dihitung ulang dengan data terbaru.</div>
+      </div>` : ""}
       <div class="kas-summary-card">
         <div class="kas-closed-tag">🔒 Kasir Sudah Ditutup — ${fmtDate(date)}</div>
         <div class="kas-row"><span>Modal Awal</span><span class="mono">${fmt(k.modalAwal)}</span></div>
@@ -3642,7 +3730,7 @@ function renderKas(){
         <div class="kas-row"><span>Pengeluaran</span><span class="mono">−${fmt(pengeluaranTotal)}</span></div>
         <div class="kas-row kas-row-total"><span>Seharusnya di Laci</span><span class="mono">${fmt(expected)}</span></div>
         <div class="kas-row"><span>Uang Fisik Dihitung</span><span class="mono">${fmt(k.uangFisik)}</span></div>
-        <div class="kas-row kas-row-total kas-${selisihCls}"><span>Selisih</span><span class="mono">${selisih>0?'+':''}${fmt(selisih)}</span></div>
+        <div class="kas-row kas-row-total kas-${selisihCls}"><span>Selisih${drifted ? ' (lama)' : ''}</span><span class="mono">${selisih>0?'+':''}${fmt(selisih)}</span></div>
       </div>
       <button class="add-item-toggle-btn" id="reopenKasBtn">🔓 Buka Lagi Kasir Hari Ini</button>
     `;
@@ -3715,7 +3803,7 @@ function renderKas(){
       const uangFisik = Math.max(0, parseInt(document.getElementById("kasUangFisik").value)||0);
       const exp = expectedCashForDate(date);
       showConfirm(`Tutup kasir untuk ${fmtDate(date)}? Selisih: ${fmt(uangFisik-exp)}. Tidak bisa diedit lagi kecuali dibuka ulang.`, ()=>{
-        setKasHari(date, { ditutup:true, uangFisik, selisih: uangFisik-exp, closedAt:new Date().toISOString() });
+        setKasHari(date, { ditutup:true, uangFisik, selisih: uangFisik-exp, closedAt:new Date().toISOString(), cashInAtClose: cashIn, pengeluaranAtClose: pengeluaranTotal });
         renderKas();
       });
     });
@@ -3762,6 +3850,17 @@ function computeRevenueSummary(list){
   let totalNilai=0, totalDiterima=0;
   list.forEach(t=>{ totalNilai += t.total; totalDiterima += (t.payment.paidAmount||0); });
   return { totalNilai, totalDiterima, piutang: Math.max(0, totalNilai-totalDiterima), count: list.length };
+}
+// Denda dihitung terpisah dari nilai sewa (bukan bagian dari t.total), dan berdasarkan TANGGAL DIBAYAR
+// (paidAt) — bukan tanggal mulai sewa transaksinya — supaya sinkron dengan cara Kas Harian menghitungnya.
+function dendaDiterimaForRange(start, end){
+  let total = 0;
+  transactions.forEach(t=>{
+    (t.dendaList||[]).forEach(d=>{
+      if(d.paid && (d.paidAt||"").slice(0,10)>=start && (d.paidAt||"").slice(0,10)<=end) total += d.amount;
+    });
+  });
+  return total;
 }
 
 function breakdownByDay(start, end, list){
@@ -3818,6 +3917,7 @@ function renderLaporanPemasukan(){
   const range = getLapRange();
   const list = transactions.filter(t=>{ const d = txnLocalDate(t); return d>=range.start && d<=range.end; });
   const sum = computeRevenueSummary(list);
+  const dendaDiterima = dendaDiterimaForRange(range.start, range.end);
 
   let breakdownRows = null, breakdownLabel = "";
   if(lapPeriodType==="bulanan"){ breakdownRows = breakdownByDay(range.start, range.end, list); breakdownLabel = "Rincian per Hari"; }
@@ -3848,6 +3948,7 @@ function renderLaporanPemasukan(){
         <div class="stat-box ok"><div class="sb-label">Sudah Diterima</div><div class="sb-value">${fmt(sum.totalDiterima)}</div></div>
         <div class="stat-box debt"><div class="sb-label">Piutang</div><div class="sb-value">${fmt(sum.piutang)}</div></div>
         <div class="stat-box"><div class="sb-label">Jumlah Transaksi</div><div class="sb-value">${sum.count}</div></div>
+        <div class="stat-box ok"><div class="sb-label">Denda Diterima</div><div class="sb-value">${fmt(dendaDiterima)}</div></div>
       </div>
       ${breakdownRows ? `<div class="section-label">${breakdownLabel}</div>${renderBarRows(breakdownRows)}` : ""}
       ${lapPeriodType==="harian" ? renderHarianTxnList(list) : ""}
@@ -3879,6 +3980,64 @@ function computeProductRecap(list){
     });
   });
   return Object.values(map).sort((a,b)=>b.qty-a.qty);
+}
+
+// ================= DAFTAR PIUTANG PER PELANGGAN =================
+// Menggabungkan sisa tagihan sewa (yang belum lunas) + denda yang belum dibayar, dikelompokkan
+// per pelanggan, supaya gampang lihat siapa yang masih ada tanggungan dan langsung bisa ditagih via WA.
+function computePiutangList(){
+  const map = {};
+  transactions.forEach(t=>{
+    const sisaSewa = Math.max(0, t.total - (t.payment.paidAmount||0));
+    const dendaBelumLunas = (t.dendaList||[]).filter(d=>!d.paid).reduce((s,d)=>s+d.amount, 0);
+    const owed = sisaSewa + dendaBelumLunas;
+    if(owed<=0) return;
+    const cid = t.customer.id;
+    if(!map[cid]) map[cid] = { customerId: cid, name: t.customer.name, phone: t.customer.phone, total: 0, items: [] };
+    map[cid].total += owed;
+    map[cid].items.push({ no: txnNo(t), sisaSewa, dendaBelumLunas });
+  });
+  return Object.values(map).sort((a,b)=>b.total-a.total);
+}
+function buildPiutangMessage(p){
+  let msg = `Halo ${p.name}, 👋\\n\\nIni pengingat dari Prof Camping untuk tagihan sewa yang masih berjalan:\\n\\n`;
+  p.items.forEach(it=>{
+    msg += `• ${it.no}: sisa sewa ${fmt(it.sisaSewa)}`;
+    if(it.dendaBelumLunas>0) msg += ` + denda ${fmt(it.dendaBelumLunas)}`;
+    msg += `\\n`;
+  });
+  msg += `\\n💰 *Total: ${fmt(p.total)}*\\n\\nMohon dilunasi ya, terima kasih! 🙏`;
+  return msg;
+}
+function renderPiutang(){
+  const list = computePiutangList();
+  const totalPiutang = list.reduce((s,p)=>s+p.total, 0);
+  const listHtml = list.length===0 ? `<div class="empty">Tidak ada piutang saat ini — semua sudah lunas 🎉</div>` : list.map(p=>`
+    <div class="prod-row" data-piutang-cust="${p.customerId}">
+      <div style="display:flex; align-items:center; flex:1; min-width:0;">
+        <div style="min-width:0;">
+          <div class="pn">${p.name}</div>
+          <div class="pmeta">${p.phone} · ${p.items.length} transaksi</div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="pq" style="color:var(--debt);">${fmt(p.total)}</div>
+        <button class="wa-tagih-btn" data-phone="${p.phone}" data-msg="${encodeURIComponent(buildPiutangMessage(p))}" style="background:var(--ok); border:none; border-radius:8px; color:var(--pine); font-size:11px; font-weight:600; padding:6px 10px; cursor:pointer;">WA</button>
+      </div>
+    </div>`).join("");
+
+  document.getElementById("piutangWrap").innerHTML = `
+    <div class="report-section">
+      <div class="report-title">📒 Piutang Pelanggan</div>
+      <div class="date-summary" style="margin-top:2px">Total piutang saat ini: <b>${fmt(totalPiutang)}</b> dari <b>${list.length} pelanggan</b></div>
+      ${listHtml}
+    </div>`;
+
+  document.querySelectorAll("#piutangWrap .wa-tagih-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      window.open(`https://wa.me/${btn.dataset.phone.replace(/[^0-9]/g,"")}?text=${btn.dataset.msg}`, "_blank");
+    });
+  });
 }
 
 function renderRekapProduk(){
@@ -3930,8 +4089,9 @@ function renderRekapProduk(){
 }
 
 function renderLaporan(){
-  laporanEl.innerHTML = `<div id="lapPemasukanWrap"></div><div style="height:6px"></div><div id="rekapProdukWrap"></div>`;
+  laporanEl.innerHTML = `<div id="lapPemasukanWrap"></div><div style="height:6px"></div><div id="piutangWrap"></div><div style="height:6px"></div><div id="rekapProdukWrap"></div>`;
   renderLaporanPemasukan();
+  renderPiutang();
   renderRekapProduk();
 }
 
@@ -4118,6 +4278,10 @@ function renderHome(){
         <div class="menu-item-icon">💰</div>
         <div class="menu-item-label">Kas Harian</div>
       </div>
+      <div class="menu-item" id="backupDataBtn">
+        <div class="menu-item-icon">💾</div>
+        <div class="menu-item-label">Backup Data</div>
+      </div>
     </div>
 
     <div class="home-active-filters">
@@ -4142,6 +4306,8 @@ function renderHome(){
       goToTab("transaksi", {keepTxnDetail:true});
     });
   });
+  const backupBtn = document.getElementById("backupDataBtn");
+  if(backupBtn) backupBtn.addEventListener("click", downloadBackup);
 }
 
 function renderDashboard(){
