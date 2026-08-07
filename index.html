@@ -2359,6 +2359,9 @@ function renderTransaksi(){
   if(txnDateMode==="hari_ini"){
     const today = todayISO();
     list = list.filter(t=> txnLocalDate(t)===today);
+  } else if(txnDateMode==="kemarin"){
+    const yesterday = addDays(todayISO(),-1);
+    list = list.filter(t=> txnLocalDate(t)===yesterday);
   } else if(txnDateMode==="custom" && txnDateStart && txnDateEnd){
     const start = txnDateStart<=txnDateEnd ? txnDateStart : txnDateEnd;
     const end = txnDateStart<=txnDateEnd ? txnDateEnd : txnDateStart;
@@ -2378,6 +2381,7 @@ function renderTransaksi(){
     <div class="dur-chips" style="margin-top:10px">
       <button class="dur-chip ${txnDateMode==='semua'?'active':''}" data-tdm="semua">Semua Tanggal</button>
       <button class="dur-chip ${txnDateMode==='hari_ini'?'active':''}" data-tdm="hari_ini">Hari Ini</button>
+      <button class="dur-chip ${txnDateMode==='kemarin'?'active':''}" data-tdm="kemarin">Kemarin</button>
       <button class="dur-chip ${txnDateMode==='custom'?'active':''}" data-tdm="custom">Custom</button>
     </div>
     ${txnDateMode==="custom" ? `
@@ -4287,6 +4291,7 @@ function renderHome(){
     <div class="home-active-filters">
       <button class="home-filter-pill" data-txn-filter="Hampir Selesai">Hampir Selesai <span class="cnt">${soon.length}</span></button>
       <button class="home-filter-pill late" data-txn-filter="Terlambat">Terlambat <span class="cnt">${late.length}</span></button>
+      <button class="home-filter-pill" id="homeTxnKemarinBtn">Transaksi Kemarin</button>
       <button class="home-see-all" data-tab="transaksi">Lihat Semua</button>
     </div>
     <div class="group-title">${previewLabel}</div>
@@ -4299,6 +4304,13 @@ function renderHome(){
       txnDetailId = null;
       goToTab("transaksi", {keepTxnDetail:true});
     });
+  });
+  const homeTxnKemarinBtn = document.getElementById("homeTxnKemarinBtn");
+  if(homeTxnKemarinBtn) homeTxnKemarinBtn.addEventListener("click", ()=>{
+    txnFilter = "Semua";
+    txnDateMode = "kemarin";
+    txnDetailId = null;
+    goToTab("transaksi", {keepTxnDetail:true});
   });
   homeEl.querySelectorAll("[data-open-txn]").forEach(card=>{
     card.addEventListener("click", ()=>{
@@ -4421,6 +4433,10 @@ function rerenderCurrentTab(){
 if(firebaseEnabled){
   function attachFirestoreSync(key, applyValue){
     db.collection("prof_camping_data").doc(key).onSnapshot(snap=>{
+      // "hasPendingWrites" artinya perubahan ini datang dari tulisan device ini sendiri yang baru dikirim
+      // dan belum dikonfirmasi server — tampilan sudah diupdate duluan saat save() dipanggil, jadi
+      // pantulan ini diabaikan supaya halaman tidak render ulang & scroll tidak balik ke atas sendiri.
+      if(snap.metadata.hasPendingWrites) return;
       if(!snap.exists) return; // belum pernah ada data tersimpan online untuk key ini, biarkan data lokal yang jalan
       const val = snap.data().value;
       applyValue(val);
@@ -4444,6 +4460,8 @@ if(firebaseEnabled){
   // Foto produk disimpan di koleksi TERPISAH (1 dokumen per produk), bukan digabung seperti data di atas,
   // supaya ukuran tiap dokumen tetap kecil dan tidak gampang kena limit 1MB Firestore.
   db.collection("product_images").onSnapshot(snap=>{
+    // sama seperti attachFirestoreSync: lewati pantulan dari upload foto oleh device ini sendiri
+    if(snap.metadata.hasPendingWrites) return;
     snap.docChanges().forEach(change=>{
       if(change.type==="removed") delete productImages[change.doc.id];
       else productImages[change.doc.id] = change.doc.data().data;
