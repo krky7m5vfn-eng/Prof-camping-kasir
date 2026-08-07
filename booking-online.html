@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Booking Online — Prof Camping</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Booking Prof Camping">
+<meta name="theme-color" content="#1B1512">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --pine:#1B1512; --pine-light:#26201B; --canvas:#F1E4D2; --canvas-dim:#C7B49C;
+    --amber:#C2622A; --amber-bright:#F2903D; --brick:#B33B2E; --line:#453A31;
+    --ok:#7FA84F; --warn:#C9A227;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--pine); overscroll-behavior-y:none;}
+  body{font-family:'Work Sans', sans-serif; color:var(--canvas); padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom); min-height:100vh;}
+  h1,h2,h3{font-family:'Big Shoulders Display', sans-serif; text-transform:uppercase; letter-spacing:0.02em;}
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  button{font-family:inherit;}
+
+  header{position:sticky; top:0; z-index:20; background:var(--pine); border-bottom:1px solid var(--line); padding:16px 16px 12px;}
+  header h1{font-size:24px; font-weight:800; margin:0; line-height:0.95;}
+  header .tagline{font-size:11px; color:var(--amber-bright); font-family:'IBM Plex Mono',monospace; letter-spacing:0.08em; margin-top:4px;}
+
+  main{padding:14px 14px 110px; max-width:720px; margin:0 auto;}
+  .section-label{font-size:13px; font-family:'IBM Plex Mono',monospace; letter-spacing:0.1em; color:var(--amber-bright); margin:20px 0 10px;}
+  .hint{font-size:12px; color:var(--canvas-dim); margin:-4px 0 12px; line-height:1.5;}
+  .empty{padding:26px 16px; text-align:center; color:var(--canvas-dim); font-size:13.5px;}
+
+  .date-card{background:var(--pine-light); border:1px solid var(--line); border-radius:12px; padding:14px; display:flex; gap:10px; flex-wrap:wrap;}
+  .date-field{flex:1; min-width:130px;}
+  .date-field label{display:block; font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--canvas-dim); margin-bottom:5px; letter-spacing:0.04em;}
+  .field{width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:var(--pine); color:var(--canvas); font-family:'Work Sans'; font-size:14px; outline:none;}
+  .field:focus{border-color:var(--amber-bright);}
+  .date-summary{grid-column:1/-1; font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--amber-bright); margin-top:4px; width:100%;}
+
+  .searchbar input{width:100%; padding:11px 14px; border-radius:999px; border:1px solid var(--line); background:var(--pine-light); color:var(--canvas); font-family:'Work Sans'; font-size:14px; outline:none;}
+  .chips{display:flex; gap:7px; overflow-x:auto; margin-top:10px; padding-bottom:4px; scrollbar-width:none;}
+  .chips::-webkit-scrollbar{display:none;}
+  .chip{flex:none; padding:6px 13px; border-radius:999px; border:1px solid var(--line); font-size:12px; font-family:'IBM Plex Mono'; color:var(--canvas-dim); background:transparent; cursor:pointer; white-space:nowrap;}
+  .chip.active{background:var(--amber); border-color:var(--amber); color:var(--pine); font-weight:600;}
+
+  .prod-row{display:flex; align-items:center; gap:10px; background:var(--pine-light); border:1px solid var(--line); border-radius:10px; padding:11px; margin-top:8px;}
+  .prod-info{flex:1; min-width:0;}
+  .prod-name{font-weight:600; font-size:14px; line-height:1.3;}
+  .prod-meta{font-family:'IBM Plex Mono'; font-size:11px; color:var(--canvas-dim); margin-top:3px;}
+  .prod-price{font-family:'IBM Plex Mono'; font-size:12.5px; color:var(--amber-bright); font-weight:600; margin-top:3px;}
+  .prod-rental-count{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--amber-bright); margin-top:4px; font-weight:600;}
+  .avail-ok{color:var(--ok);}
+  .avail-low{color:var(--warn);}
+  .avail-none{color:var(--brick);}
+  .prod-action{flex:none;}
+  .add-btn{width:36px; height:36px; border-radius:9px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-size:20px; cursor:pointer;}
+  .add-btn:disabled{opacity:0.3; border-color:var(--canvas-dim); color:var(--canvas-dim);}
+  .stepper{display:flex; align-items:center; gap:8px;}
+  .stepper button{width:30px; height:30px; border-radius:8px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-size:16px; cursor:pointer;}
+  .stepper .val{font-family:'IBM Plex Mono'; font-weight:600; min-width:20px; text-align:center;}
+
+  .cart-bar{position:fixed; left:0; right:0; bottom:0; z-index:30; background:var(--pine-light); border-top:1px solid var(--line); padding:12px 16px calc(12px + env(safe-area-inset-bottom)); display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .cart-bar.hidden{display:none;}
+  .cart-bar .cb-label{font-family:'IBM Plex Mono'; font-size:10.5px; color:var(--canvas-dim);}
+  .cart-bar .cb-amount{font-family:'Big Shoulders Display'; font-size:22px; font-weight:800; color:var(--amber-bright);}
+  .cart-bar button{padding:12px 20px; border-radius:10px; border:none; background:var(--amber); color:var(--pine); font-family:'IBM Plex Mono'; font-weight:700; font-size:12.5px; cursor:pointer;}
+
+  .overlay{position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:40; opacity:0; pointer-events:none; transition:opacity .2s;}
+  .overlay.open{opacity:1; pointer-events:auto;}
+  .sheet{position:fixed; left:0; right:0; bottom:0; z-index:41; background:var(--pine); border-radius:18px 18px 0 0; border-top:1px solid var(--line); max-height:88vh; overflow-y:auto; transform:translateY(100%); transition:transform .25s ease; padding:18px 18px calc(18px + env(safe-area-inset-bottom));}
+  .sheet.open{transform:translateY(0);}
+  .sheet h2{font-size:22px; margin:0 0 14px;}
+  .sheet-close{position:absolute; top:14px; right:16px; background:none; border:none; color:var(--canvas-dim); font-family:'IBM Plex Mono'; font-size:12px; cursor:pointer;}
+  .cart-line{display:flex; justify-content:space-between; font-size:13.5px; padding:7px 0; border-bottom:1px solid rgba(69,58,49,0.5);}
+  .cart-line:last-child{border-bottom:none;}
+  .cart-total-row{display:flex; justify-content:space-between; font-family:'IBM Plex Mono'; font-weight:700; font-size:15px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); color:var(--amber-bright);}
+  .submit-btn{width:100%; margin-top:16px; padding:14px; border-radius:10px; border:none; background:var(--amber); color:var(--pine); font-family:'IBM Plex Mono'; font-weight:700; font-size:13.5px; cursor:pointer;}
+  .submit-btn:disabled{opacity:0.4;}
+  .err-text{color:#E2917F; font-size:12px; font-family:'IBM Plex Mono'; margin-top:8px;}
+
+  .confirm-box{text-align:center; padding:30px 16px;}
+  .confirm-box .ci{font-size:44px;}
+  .confirm-box h2{font-size:22px; margin:10px 0 8px;}
+  .confirm-box p{font-size:13.5px; color:var(--canvas-dim); line-height:1.6;}
+  .wa-btn{display:inline-block; margin-top:16px; padding:12px 20px; border-radius:10px; background:#25D366; color:#0b1a10; font-family:'IBM Plex Mono'; font-weight:700; font-size:12.5px; text-decoration:none;}
+
+  .status-pill{display:inline-block; font-family:'IBM Plex Mono'; font-size:10.5px; padding:3px 8px; border-radius:999px; margin-top:8px;}
+  .status-offline{background:rgba(201,162,39,0.18); color:var(--warn);}
+  .status-online{background:rgba(127,168,79,0.18); color:var(--ok);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏕️ Booking Online</h1>
+  <div class="tagline">PROF CAMPING · SEWA ALAT CAMPING</div>
+  <span class="status-pill" id="statusPill">Menghubungkan…</span>
+</header>
+
+<main>
+  <div class="section-label">1. Pilih Tanggal Sewa</div>
+  <div class="date-card">
+    <div class="date-field">
+      <label>Mulai Sewa</label>
+      <input class="field" type="date" id="startDateInput">
+    </div>
+    <div class="date-field">
+      <label>Lama Sewa (hari)</label>
+      <input class="field" type="number" min="1" id="durationInput" value="1">
+    </div>
+    <div class="date-summary" id="dateSummary"></div>
+  </div>
+
+  <div class="section-label">2. Pilih Alat</div>
+  <div class="searchbar"><input id="searchInput" type="text" placeholder="Cari alat… misal: tenda, kompor, lampu"></div>
+  <div class="chips" id="chipsRow"></div>
+  <div id="prodList"><div class="empty">Memuat katalog…</div></div>
+</main>
+
+<div class="cart-bar hidden" id="cartBar">
+  <div>
+    <div class="cb-label" id="cartCountLabel">0 ITEM DIPILIH</div>
+    <div class="cb-amount mono" id="cartAmount">Rp 0</div>
+  </div>
+  <button id="openCheckoutBtn">Lanjut Booking →</button>
+</div>
+
+<div class="overlay" id="checkoutOverlay"></div>
+<div class="sheet" id="checkoutSheet">
+  <button class="sheet-close" id="closeCheckoutSheet">TUTUP ✕</button>
+  <h2>Ringkasan Booking</h2>
+  <div id="checkoutLines"></div>
+  <div class="cart-total-row"><span>TOTAL</span><span id="checkoutTotal">Rp 0</span></div>
+
+  <div class="section-label">Data Diri</div>
+  <input class="field" id="custName" placeholder="Nama lengkap" style="margin-bottom:8px;">
+  <input class="field" id="custPhone" placeholder="No. HP / WhatsApp (misal 0812xxxxxxx)" inputmode="tel" style="margin-bottom:8px;">
+  <textarea class="field" id="custNote" placeholder="Catatan tambahan (opsional)" rows="2"></textarea>
+  <div class="err-text" id="checkoutError"></div>
+  <button class="submit-btn" id="submitBookingBtn">Kirim Permintaan Booking</button>
+</div>
+
+<div class="overlay" id="confirmOverlay"></div>
+<div class="sheet" id="confirmSheet">
+  <div class="confirm-box">
+    <div class="ci">✅</div>
+    <h2>Booking Terkirim!</h2>
+    <p id="confirmText"></p>
+    <a class="wa-btn" id="waConfirmLink" href="#" target="_blank">💬 Konfirmasi via WhatsApp</a><br>
+    <button class="sheet-close" style="position:static; margin-top:16px;" id="closeConfirmSheet">Tutup</button>
+  </div>
+</div>
+
+<script>
+// ================= FIREBASE (project sama dengan aplikasi admin Prof Camping) =================
+const firebaseConfig = {
+  apiKey: "AIzaSyD_HTaCk6Bv_GVpzE0Nh_033rZ6SMHbz3Q",
+  authDomain: "profcamping-3396a.firebaseapp.com",
+  projectId: "profcamping-3396a",
+  storageBucket: "profcamping-3396a.firebasestorage.app",
+  messagingSenderId: "1018588273596",
+  appId: "1:1018588273596:web:5dc20386584bad104869b9"
+};
+const WA_NUMBER_ADMIN = "6282292191789";
+let db = null, firebaseEnabled = false;
+try{
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  db.settings({ ignoreUndefinedProperties: true });
+  firebaseEnabled = true;
+}catch(err){ console.error("Gagal konek Firebase:", err); }
+
+const fmt = n => "Rp " + (n||0).toLocaleString("id-ID");
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const todayISO = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const addDays = (iso,n) => { const d=new Date(iso+"T00:00:00"); d.setDate(d.getDate()+n); const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0"); return `${y}-${m}-${da}`; };
+const fmtDate = iso => { const d=new Date(iso+"T00:00:00"); return d.toLocaleDateString("id-ID",{day:"numeric",month:"short",year:"numeric"}); };
+
+// ================= KATALOG (sama persis dengan aplikasi admin) =================
+const CATALOG = [
+["Tenda 7 Orang Tendaki Molucass 6 Pro","Tenda",100000],
+["Tenda 7 Orang Wildshell Mandala 6 Pro","Tenda",100000],
+["Tenda 5 Orang Wildshell Raya 4 Pro Hijau","Tenda",60000],
+["Tenda 5 Orang Wildshell Jayadipa","Tenda",55000],
+["Tenda 5 Orang Rei Eliot V3","Tenda",50000],
+["Tenda 4 Orang Compass Lwy","Tenda",50000],
+["Tenda 2-3 Orang Wildshell Navageo","Tenda",40000],
+["Tenda 4 Orang Dhaulgiri","Tenda",35000],
+["Tenda 2 Orang Dhaulgiri","Tenda",25000],
+["Tenda 2 Orang Arei","Tenda",25000],
+["Flysheet","Tenda",15000],
+["Tiang Flysheet","Tenda",15000],
+["Sleeping Bag","Peralatan Tidur",15000],
+["Sleeping Pad / Matras Angin","Peralatan Tidur",25000],
+["Matras","Peralatan Tidur",5000],
+["Lampu Outdoor","Alat Penerangan",10000],
+["Lampu Tenda","Alat Penerangan",10000],
+["Headlamp","Alat Penerangan",15000],
+["Senter Tangan","Alat Penerangan",15000],
+["Kompor Mini","Peralatan Masak",10000],
+["Nesting B","Peralatan Masak",10000],
+["Kompor Mawar","Peralatan Masak",15000],
+["Pan BBQ","Peralatan Masak",25000],
+["Kompor BBQ","Peralatan Masak",20000],
+["Teko Air","Peralatan Masak",10000],
+["Nesting A","Peralatan Masak",15000],
+["Panci Kecil","Peralatan Masak",5000],
+["Sewa Tabung + Isi Gas","Peralatan Masak",10000],
+["Gelas Eiger Besar","Peralatan Masak",5000],
+["3 Pcs Gelas Mini Dhaulgiri","Peralatan Masak",10000],
+["Alat Bakar Arang","Peralatan Masak",15000],
+["Kursi Dhaulgiri","Peralatan Santai",15000],
+["Kursi Wildshell","Peralatan Santai",20000],
+["Meja Standar","Peralatan Santai",20000],
+["Meja Dhaulgiri","Peralatan Santai",25000],
+["Meja XXL","Peralatan Santai",35000],
+["Meja Wildshell","Peralatan Santai",25000],
+["Paket 4 Kursi + 1 Meja XL","Peralatan Santai",80000],
+["Paket 6 Kursi + 1 Meja XXL","Peralatan Santai",120000],
+["Hammock Single","Peralatan Santai",10000],
+["Tikar Piknik Polos","Peralatan Santai",15000],
+["Powerbank Ugreen + Kabel C to C","Peralatan Lainnya",25000],
+["Powerbank Vivan","Peralatan Lainnya",20000],
+["Tripod","Peralatan Lainnya",10000],
+["Carrier 45-65L","Peralatan Lainnya",35000],
+["Daypack 25-40L","Peralatan Lainnya",25000],
+["Lensa Apexel","Peralatan Lainnya",15000],
+["Sepatu Gunung","Peralatan Lainnya",25000],
+["Tas Hydropack","Peralatan Lainnya",15000],
+["Jaket Gelembung / Jaket Gorpcore","Peralatan Lainnya",25000],
+["Topi Bucket","Peralatan Lainnya",5000],
+["Rompi","Peralatan Lainnya",15000],
+["Treking Pole","Peralatan Lainnya",10000],
+["Sendal Gunung","Peralatan Lainnya",15000],
+["Kacamata Gorpcore","Peralatan Lainnya",5000],
+["Pisau + Sendok + Garpu","Peralatan Masak",5000],
+["Kursi Trailtop","Peralatan Santai",25000],
+["Kursi Lipat Decathlon","Peralatan Santai",25000],
+["Lampu Tumblr","Alat Penerangan",10000],
+["Lampu Sorot","Alat Penerangan",25000],
+["Speaker Bluetooth","Peralatan Lainnya",20000],
+["Tenun Ikat Kepala","Peralatan Lainnya",5000],
+["Daypack 18 Liter Ultralight","Peralatan Lainnya",10000],
+["Sarung Tangan","Peralatan Lainnya",5000],
+].map((r,i)=>({id:"p"+i, name:r[0], cat:r[1], price:r[2], unit:"Hari"}));
+
+let productOverrides = {};
+let customProducts = [];
+let productStock = {};
+let transactions = [];
+let bookings = [];
+let customersCache = [];
+
+function allProducts(){
+  const base = CATALOG.map(p=>{
+    const o = productOverrides[p.id];
+    return o ? Object.assign({}, p, o) : p;
+  });
+  return [...base, ...customProducts];
+}
+function getCategories(){
+  const cats = [...new Set(allProducts().map(p=>p.cat))];
+  const priority = "Tenda";
+  return cats.sort((a,b)=>{
+    if(a===priority) return -1;
+    if(b===priority) return 1;
+    return a.localeCompare(b, "id", { sensitivity:"base" });
+  });
+}
+
+// ================= STATE =================
+let startDate = todayISO();
+let durationDays = 1;
+let activeCat = "Semua", query = "";
+let cart = {}; // productId -> qty
+
+function overlaps(aStart,aEnd,bStart,bEnd){ return aStart < bEnd && bStart < aEnd; }
+
+function committedQty(product, rangeStart, rangeEnd){
+  let sum = 0;
+  transactions.forEach(t=>{
+    if(t.status!=="aktif") return;
+    if(!overlaps(t.startDate, t.endDate, rangeStart, rangeEnd)) return;
+    sum += (t.items||[]).filter(i=>i.name===product.name).reduce((s,i)=>s+i.qty,0);
+  });
+  bookings.forEach(b=>{
+    if(b.status==="batal") return;
+    if(!overlaps(b.startDate, b.endDate, rangeStart, rangeEnd)) return;
+    sum += (b.items||[]).filter(i=>i.name===product.name).reduce((s,i)=>s+i.qty,0);
+  });
+  return sum;
+}
+function availability(product){
+  const s = productStock[product.id];
+  const total = s ? (s.total||0) : 0;
+  if(total<=0) return null; // stok belum diatur admin
+  const rangeEnd = addDays(startDate, durationDays);
+  const committed = committedQty(product, startDate, rangeEnd);
+  return Math.max(0, total - committed);
+}
+// Angka dasar "pernah disewa" per produk (ditentukan sekali, tidak berubah) — supaya toko kelihatan sudah sering dipakai.
+// Hanya berlaku buat barang bawaan (p0-p62); barang custom yang admin tambah sendiri tidak dapat angka dasar.
+const BASE_RENTAL_COUNTS = {
+  "p0": 263,
+  "p1": 128,
+  "p2": 106,
+  "p3": 289,
+  "p4": 170,
+  "p5": 162,
+  "p6": 157,
+  "p7": 135,
+  "p8": 288,
+  "p9": 126,
+  "p10": 273,
+  "p11": 297,
+  "p12": 239,
+  "p13": 122,
+  "p14": 251,
+  "p15": 208,
+  "p16": 108,
+  "p17": 107,
+  "p18": 123,
+  "p19": 155,
+  "p20": 159,
+  "p21": 229,
+  "p22": 254,
+  "p23": 298,
+  "p24": 243,
+  "p25": 150,
+  "p26": 266,
+  "p27": 292,
+  "p28": 207,
+  "p29": 156,
+  "p30": 214,
+  "p31": 250,
+  "p32": 171,
+  "p33": 101,
+  "p34": 140,
+  "p35": 285,
+  "p36": 187,
+  "p37": 268,
+  "p38": 139,
+  "p39": 281,
+  "p40": 186,
+  "p41": 291,
+  "p42": 282,
+  "p43": 197,
+  "p44": 124,
+  "p45": 191,
+  "p46": 188,
+  "p47": 167,
+  "p48": 111,
+  "p49": 217,
+  "p50": 237,
+  "p51": 131,
+  "p52": 196,
+  "p53": 120,
+  "p54": 241,
+  "p55": 175,
+  "p56": 192,
+  "p57": 149,
+  "p58": 117,
+  "p59": 252,
+  "p60": 158,
+  "p61": 174,
+  "p62": 247
+};
+// Jumlah "pernah disewa" (per unit per hari) — angka dasar (tetap) + hitungan otomatis dari transaksi asli (terus bertambah)
+function rentalCount(product){
+  const base = BASE_RENTAL_COUNTS[product.id] || 0;
+  const auto = transactions.reduce((sum,t)=>{
+    return sum + (t.items||[]).filter(i=>i.name===product.name).reduce((s2,i)=>s2 + i.qty*(t.durationDays||1), 0);
+  }, 0);
+  return base + auto;
+}
+
+function renderChips(){
+  const cats = ["Semua", ...getCategories()];
+  document.getElementById("chipsRow").innerHTML = cats.map(c=>
+    `<button type="button" class="chip ${activeCat===c?'active':''}" data-cat="${c}">${c}</button>`
+  ).join("");
+  document.querySelectorAll("#chipsRow .chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{ activeCat = btn.dataset.cat; renderProdList(); renderChips(); });
+  });
+}
+
+function renderProdList(){
+  const listEl = document.getElementById("prodList");
+  let items = allProducts();
+  if(activeCat!=="Semua") items = items.filter(p=>p.cat===activeCat);
+  if(query.trim()) items = items.filter(p=>p.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  if(items.length===0){
+    listEl.innerHTML = `<div class="empty">Tidak ditemukan.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = items.map(p=>{
+    const avail = availability(p);
+    const qty = cart[p.id] || 0;
+    let availHtml, disabled = false;
+    if(avail===null){ availHtml = `<span class="avail-none">Hubungi kami untuk cek stok</span>`; disabled = true; }
+    else if(avail<=0){ availHtml = `<span class="avail-none">Tidak tersedia di tanggal ini</span>`; disabled = true; }
+    else if(avail<=2){ availHtml = `<span class="avail-low">Tersisa ${avail} unit</span>`; }
+    else { availHtml = `<span class="avail-ok">Tersedia ${avail} unit</span>`; }
+
+    return `<div class="prod-row" data-pid="${p.id}">
+      <div class="prod-info">
+        <div class="prod-name">${p.name}</div>
+        <div class="prod-meta">${availHtml}</div>
+        <div class="prod-price">${fmt(p.price)} <span style="color:var(--canvas-dim); font-weight:500;">/ hari</span></div>
+        ${rentalCount(p)>0 ? `<div class="prod-rental-count">🔥 ${rentalCount(p)}x sudah disewa</div>` : ""}
+      </div>
+      <div class="prod-action">
+        ${qty>0 ? `<div class="stepper">
+          <button type="button" data-op="-" data-pid="${p.id}">−</button>
+          <span class="val">${qty}</span>
+          <button type="button" data-op="+" data-pid="${p.id}" ${avail!==null && qty>=avail ? 'disabled' : ''}>+</button>
+        </div>` : `<button class="add-btn" data-op="+" data-pid="${p.id}" ${disabled?'disabled':''}>+</button>`}
+      </div>
+    </div>`;
+  }).join("");
+
+  listEl.querySelectorAll("[data-op]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const pid = btn.dataset.pid;
+      const p = allProducts().find(x=>x.id===pid);
+      const avail = availability(p);
+      let qty = cart[pid] || 0;
+      qty = btn.dataset.op==="+" ? qty+1 : Math.max(0, qty-1);
+      if(avail!==null) qty = Math.min(qty, avail);
+      if(qty<=0) delete cart[pid]; else cart[pid] = qty;
+      renderProdList();
+      renderCartBar();
+    });
+  });
+}
+
+function cartEntries(){
+  return Object.keys(cart).map(id=>({ product: allProducts().find(p=>p.id===id), qty: cart[id] })).filter(e=>e.product);
+}
+function cartSubtotalPerDay(){ return cartEntries().reduce((s,e)=>s+e.product.price*e.qty,0); }
+function cartTotal(){ return cartSubtotalPerDay() * durationDays; }
+
+function renderCartBar(){
+  const entries = cartEntries();
+  const bar = document.getElementById("cartBar");
+  if(entries.length===0){ bar.classList.add("hidden"); return; }
+  bar.classList.remove("hidden");
+  const count = entries.reduce((s,e)=>s+e.qty,0);
+  document.getElementById("cartCountLabel").textContent = `${count} ITEM DIPILIH`;
+  document.getElementById("cartAmount").textContent = fmt(cartTotal());
+}
+
+function updateDateSummary(){
+  const end = addDays(startDate, durationDays);
+  document.getElementById("dateSummary").textContent = `${fmtDate(startDate)} → ${fmtDate(end)} (${durationDays} hari)`;
+}
+
+document.getElementById("startDateInput").value = startDate;
+document.getElementById("startDateInput").min = todayISO();
+document.getElementById("startDateInput").addEventListener("change", e=>{
+  startDate = e.target.value || todayISO();
+  updateDateSummary(); renderProdList(); renderCartBar();
+});
+document.getElementById("durationInput").addEventListener("input", e=>{
+  durationDays = Math.max(1, parseInt(e.target.value)||1);
+  updateDateSummary(); renderProdList(); renderCartBar();
+});
+document.getElementById("searchInput").addEventListener("input", e=>{ query = e.target.value; renderProdList(); });
+updateDateSummary();
+
+// ================= CHECKOUT SHEET =================
+const checkoutOverlay = document.getElementById("checkoutOverlay");
+const checkoutSheet = document.getElementById("checkoutSheet");
+function openCheckoutSheet(){
+  document.getElementById("checkoutLines").innerHTML = cartEntries().map(e=>`
+    <div class="cart-line"><span>${e.product.name} × ${e.qty}</span><span class="mono">${fmt(e.product.price*e.qty*durationDays)}</span></div>
+  `).join("");
+  document.getElementById("checkoutTotal").textContent = fmt(cartTotal());
+  document.getElementById("checkoutError").textContent = "";
+  checkoutOverlay.classList.add("open"); checkoutSheet.classList.add("open");
+}
+function closeCheckoutSheet(){ checkoutOverlay.classList.remove("open"); checkoutSheet.classList.remove("open"); }
+document.getElementById("openCheckoutBtn").addEventListener("click", openCheckoutSheet);
+document.getElementById("closeCheckoutSheet").addEventListener("click", closeCheckoutSheet);
+checkoutOverlay.addEventListener("click", closeCheckoutSheet);
+
+const confirmOverlay = document.getElementById("confirmOverlay");
+const confirmSheet = document.getElementById("confirmSheet");
+function closeConfirmSheet(){ confirmOverlay.classList.remove("open"); confirmSheet.classList.remove("open"); }
+document.getElementById("closeConfirmSheet").addEventListener("click", closeConfirmSheet);
+confirmOverlay.addEventListener("click", closeConfirmSheet);
+
+document.getElementById("submitBookingBtn").addEventListener("click", async ()=>{
+  const errEl = document.getElementById("checkoutError");
+  const name = document.getElementById("custName").value.trim();
+  const phoneRaw = document.getElementById("custPhone").value.trim();
+  const phone = phoneRaw.replace(/[^0-9]/g,"");
+  const note = document.getElementById("custNote").value.trim();
+  const entries = cartEntries();
+
+  if(entries.length===0){ errEl.textContent = "Pilih alat dulu ya."; return; }
+  if(!name){ errEl.textContent = "Nama wajib diisi."; return; }
+  if(!phone || phone.length<9){ errEl.textContent = "No. HP/WhatsApp wajib diisi dengan benar."; return; }
+  if(!firebaseEnabled){ errEl.textContent = "Tidak bisa konek ke server, cek koneksi internet."; return; }
+
+  const btn = document.getElementById("submitBookingBtn");
+  btn.disabled = true; btn.textContent = "Mengirim…";
+  errEl.textContent = "";
+
+  try{
+    let customer = customersCache.find(c=>c.phone===phone);
+    if(!customer){
+      customer = { id: uid(), name, phone };
+      const newCustomers = [...customersCache, customer];
+      await db.collection("prof_camping_data").doc("basecamp_customers").set({ value: newCustomers, updatedAt: Date.now() });
+      customersCache = newCustomers;
+    } else {
+      customer = { ...customer, name };
+    }
+
+    const subtotal = cartTotal();
+    const booking = {
+      id: uid(),
+      customer,
+      items: entries.map(e=>({ name: e.product.name, price: e.product.price, qty: e.qty })),
+      durationDays,
+      startDate,
+      endDate: addDays(startDate, durationDays),
+      subtotal,
+      discount: { type:"none", value:0, amount:0 },
+      jaminan: { type:"none", note:"" },
+      dp: 0,
+      paymentMethod: "cash",
+      total: subtotal,
+      status: "booking",
+      note: note || "",
+      source: "booking-online",
+      createdAt: new Date().toISOString()
+    };
+    const newBookings = [booking, ...bookings];
+    await db.collection("prof_camping_data").doc("basecamp_bookings").set({ value: newBookings, updatedAt: Date.now() });
+    bookings = newBookings;
+
+    // reset cart & tampilkan konfirmasi
+    cart = {};
+    closeCheckoutSheet();
+    renderProdList(); renderCartBar();
+
+    const waText = encodeURIComponent(`Halo, saya ${name} baru saja booking online:\n${entries.map(e=>`- ${e.product.name} x${e.qty}`).join("\n")}\nTanggal: ${fmtDate(startDate)} - ${fmtDate(booking.endDate)} (${durationDays} hari)\nTotal: ${fmt(subtotal)}\nMohon dikonfirmasi ya. Terima kasih!`);
+    document.getElementById("waConfirmLink").href = `https://wa.me/${WA_NUMBER_ADMIN}?text=${waText}`;
+    document.getElementById("confirmText").textContent = `Terima kasih ${name}! Permintaan booking kamu sudah kami terima. Admin akan segera menghubungi untuk konfirmasi. Biar lebih cepat, langsung tekan tombol WhatsApp di bawah ya.`;
+    confirmOverlay.classList.add("open"); confirmSheet.classList.add("open");
+  }catch(err){
+    console.error("Gagal kirim booking:", err);
+    errEl.textContent = "Gagal mengirim, coba lagi. Pastikan internet aktif.";
+  }finally{
+    btn.disabled = false; btn.textContent = "Kirim Permintaan Booking";
+  }
+});
+
+// ================= SINKRONISASI REALTIME (baca data terbaru dari aplikasi admin) =================
+if(firebaseEnabled){
+  const statusPill = document.getElementById("statusPill");
+  let ready = { overrides:false, custom:false, stock:false, txn:false, booking:false, cust:false };
+  function checkReady(){
+    if(Object.values(ready).every(Boolean)){
+      statusPill.textContent = "Tersambung Online"; statusPill.className = "status-pill status-online";
+      renderChips(); renderProdList();
+    }
+  }
+  db.collection("prof_camping_data").doc("basecamp_product_overrides").onSnapshot(snap=>{
+    productOverrides = snap.exists ? (snap.data().value||{}) : {};
+    ready.overrides = true; checkReady(); renderProdList();
+  });
+  db.collection("prof_camping_data").doc("basecamp_custom_products").onSnapshot(snap=>{
+    customProducts = snap.exists ? (snap.data().value||[]) : [];
+    ready.custom = true; checkReady(); renderChips(); renderProdList();
+  });
+  db.collection("prof_camping_data").doc("basecamp_product_stock").onSnapshot(snap=>{
+    productStock = snap.exists ? (snap.data().value||{}) : {};
+    ready.stock = true; checkReady(); renderProdList();
+  }, ()=>{ statusPill.textContent = "Gagal Tersambung"; statusPill.className = "status-pill status-offline"; });
+  db.collection("prof_camping_data").doc("basecamp_transactions").onSnapshot(snap=>{
+    transactions = snap.exists ? (snap.data().value||[]) : [];
+    ready.txn = true; checkReady(); renderProdList();
+  });
+  db.collection("prof_camping_data").doc("basecamp_bookings").onSnapshot(snap=>{
+    bookings = snap.exists ? (snap.data().value||[]) : [];
+    ready.booking = true; checkReady(); renderProdList();
+  });
+  db.collection("prof_camping_data").doc("basecamp_customers").onSnapshot(snap=>{
+    customersCache = snap.exists ? (snap.data().value||[]) : [];
+    ready.cust = true; checkReady();
+  });
+} else {
+  document.getElementById("statusPill").textContent = "Gagal Konek Firebase";
+  document.getElementById("statusPill").className = "status-pill status-offline";
+  document.getElementById("prodList").innerHTML = `<div class="empty">Tidak bisa konek ke server. Cek koneksi internet lalu buka ulang halaman ini.</div>`;
+}
+</script>
+</body>
+</html>
