@@ -123,6 +123,19 @@
   .stok-row-action{display:flex; align-items:center; gap:10px; flex:none;}
   .stok-row-ok{font-family:'IBM Plex Mono'; font-size:11.5px; color:var(--ok); flex:none;}
   .stok-done-btn{padding:8px 12px; border-radius:8px; border:1px solid var(--ok); background:transparent; color:var(--ok); font-family:'IBM Plex Mono'; font-size:11.5px; font-weight:600; cursor:pointer; white-space:nowrap;}
+
+  .kas-summary-card{background:var(--pine-light); border:1px solid var(--line); border-radius:12px; padding:14px;}
+  .kas-row{display:flex; justify-content:space-between; align-items:center; font-size:13.5px; padding:6px 0;}
+  .kas-row-total{border-top:1px dashed var(--line); margin-top:6px; padding-top:10px; font-weight:700; font-size:15px;}
+  .kas-ok{color:var(--ok);} .kas-warn{color:var(--warn);} .kas-debt{color:var(--brick);}
+  .kas-closed-tag{font-family:'IBM Plex Mono'; font-size:12px; color:var(--amber-bright); font-weight:600; margin-bottom:10px;}
+  .kas-expense-row{display:flex; justify-content:space-between; align-items:center; background:var(--pine-light); border:1px solid var(--line); border-radius:9px; padding:10px 12px; margin-bottom:7px;}
+  .ke-desc{font-size:13.5px; font-weight:600;}
+  .ke-time{font-size:10.5px; color:var(--canvas-dim); margin-top:2px;}
+  .ke-amount{color:var(--brick); font-weight:600; font-size:13px;}
+  .del-kas-expense-btn{background:none; border:none; color:var(--canvas-dim); font-size:14px; cursor:pointer;}
+  .kas-add-expense{display:grid; grid-template-columns:1fr 110px auto; gap:8px; margin:10px 0 18px; align-items:center;}
+  .kas-add-expense .add-product-btn{white-space:nowrap;}
   .tag-bottom{display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:2px; flex-wrap:wrap;}
   .tag-price{font-family:'IBM Plex Mono',monospace; font-size:clamp(10px,9.5cqi,16px); color:var(--amber-bright); font-weight:600;}
   .tag-price small{font-size:clamp(7.5px,6.5cqi,10.5px); color:var(--canvas-dim); font-weight:500;}
@@ -468,6 +481,7 @@
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-storage-compat.js"></script>
 </head>
 <body>
 <div id="loginScreen" hidden>
@@ -515,6 +529,7 @@
 <main id="laporanView" style="display:none"></main>
 <main id="dashboardView" style="display:none"></main>
 <main id="stokView" style="display:none"></main>
+<main id="kasView" style="display:none"></main>
 
 <button class="cart-fab" id="cartFab" hidden><span>Checkout</span><span class="count" id="cartCount">0</span></button>
 
@@ -756,11 +771,13 @@ const firebaseConfig = {
 
 let firebaseEnabled = false;
 let db = null;
+let storage = null;
 try{
   if(firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("GANTI_")){
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     db.settings({ ignoreUndefinedProperties: true }); // jaga-jaga kalau ada field opsional yang kosong
+    storage = firebase.storage(); // dipakai untuk simpan foto produk (link, bukan teks base64 numpuk di kode)
     firebaseEnabled = true;
   }
 }catch(err){
@@ -776,7 +793,8 @@ const FIRESTORE_SYNCED_KEYS = [
   "basecamp_bookings",
   "basecamp_custom_products",
   "basecamp_product_overrides",
-  "basecamp_product_stock"
+  "basecamp_product_stock",
+  "basecamp_kas_harian"
 ];
 
 // ================= KONEKSI KE GOOGLE SHEETS (rekap transaksi otomatis) =================
@@ -1050,6 +1068,38 @@ function jenisProsesLabel(jp){
 function jenisProsesFullLabel(jp){
   return jp==="gas" ? "Wajib Isi Ulang Gas" : jp==="cuci" ? "Wajib Dicuci" : "Barang Biasa";
 }
+
+// ================= KAS HARIAN (LACI) =================
+// Disimpan per tanggal (key "YYYY-MM-DD"): { modalAwal, pengeluaran:[{id,desc,amount,at}], ditutup, uangFisik, selisih, closedAt }
+// Uang Masuk dihitung OTOMATIS dari t.paymentHistory (semua transaksi) yang method="cash" & tanggalnya = tanggal terpilih.
+// Catatan: DP booking yang dibuat langsung sebagai "booking" (bukan transaksi aktif) belum masuk hitungan ini,
+// karena baru tercatat sebagai pemasukan tunai saat booking itu diaktifkan jadi transaksi.
+let kasHarian = load("basecamp_kas_harian", {});
+
+function getKasHari(date){
+  return kasHarian[date] || { modalAwal:0, pengeluaran:[], ditutup:false, uangFisik:null, selisih:null, closedAt:null };
+}
+function setKasHari(date, patch){
+  const current = getKasHari(date);
+  kasHarian[date] = Object.assign({}, current, patch);
+  save("basecamp_kas_harian", kasHarian);
+}
+function cashInForDate(date){
+  let total = 0;
+  transactions.forEach(t=>{
+    (t.paymentHistory||[]).forEach(h=>{
+      if(h.method==="cash" && (h.at||"").slice(0,10)===date) total += h.amount;
+    });
+  });
+  return total;
+}
+function pengeluaranTotalForDate(date){
+  return getKasHari(date).pengeluaran.reduce((s,p)=>s+p.amount,0);
+}
+function expectedCashForDate(date){
+  const k = getKasHari(date);
+  return (k.modalAwal||0) + cashInForDate(date) - pengeluaranTotalForDate(date);
+}
 // Foto default produk, diekstrak & dikompres dari katalog PDF terbaru — dipakai sebagai foto awal
 // kalau belum ada foto yang disimpan manual lewat tombol edit produk.
 const DEFAULT_PRODUCT_IMAGES = {
@@ -1198,6 +1248,7 @@ function goToTab(tabName, opts={}){
   document.getElementById("laporanView").style.display = activeTab==="laporan" ? "" : "none";
   document.getElementById("dashboardView").style.display = activeTab==="dashboard" ? "" : "none";
   document.getElementById("stokView").style.display = activeTab==="stok" ? "" : "none";
+  document.getElementById("kasView").style.display = activeTab==="kas" ? "" : "none";
   document.getElementById("itemCountStat").textContent =
     activeTab==="katalog" ? (allProducts().length+" ITEM") :
     activeTab==="booking" ? (bookings.filter(b=>b.status==="booking").length+" MENUNGGU") :
@@ -1213,6 +1264,7 @@ function goToTab(tabName, opts={}){
   if(activeTab==="laporan") renderLaporan();
   if(activeTab==="dashboard") renderDashboard();
   if(activeTab==="stok") renderStok();
+  if(activeTab==="kas") renderKas();
   window.scrollTo(0,0);
 }
 document.addEventListener("click", (e)=>{
@@ -2059,6 +2111,16 @@ saveBtn.addEventListener("click", ()=>{
     if(customers.some(c=>c.id===customer.id)) syncCustomerInCustomersList(customer);
     else { customers.push(customer); save("basecamp_customers", customers); }
 
+    // Pisahkan pembayaran DP (sudah masuk laci di HARI BOOKING DIBUAT) dari pembayaran
+    // tambahan yang baru diterima SEKARANG saat aktivasi (misal pelunasan saat ambil barang).
+    // Ini supaya Kas Harian tidak menghitung ulang uang DP yang sebenarnya sudah masuk di hari lain.
+    const dpAlready = b ? Math.min(b.dp||0, initialPaidAmount) : 0;
+    const additionalNow = Math.max(0, initialPaidAmount - dpAlready);
+    const activationPaymentHistory = [
+      ...(dpAlready>0 ? [{ id: uid(), amount: dpAlready, method: b.paymentMethod||"cash", note: "DP Booking", at: b.createdAt||new Date().toISOString() }] : []),
+      ...(additionalNow>0 ? [{ id: uid(), amount: additionalNow, method: draft.paymentMethod, note: "Pelunasan saat aktivasi", at: new Date().toISOString() }] : [])
+    ];
+
     const txn = {
       id: uid(),
       no: nextTxnNo(),
@@ -2071,7 +2133,7 @@ saveBtn.addEventListener("click", ()=>{
       discount: { type: draft.discount.type, value: draft.discount.value||0, amount: discountAmount },
       jaminan: { type: draft.jaminan.type, note: draft.jaminan.note||"" },
       payment: { status: draft.payment.status, paidAmount: initialPaidAmount, method: draft.paymentMethod },
-      paymentHistory: buildInitialPaymentHistory(initialPaidAmount, draft.paymentMethod),
+      paymentHistory: activationPaymentHistory,
       total: grandTotal,
       status: "aktif",
       dendaList: [],
@@ -3413,6 +3475,7 @@ function renderQuickInput(){
 const laporanEl = document.getElementById("laporanView");
 const dashboardEl = document.getElementById("dashboardView");
 const stokEl = document.getElementById("stokView");
+const kasEl = document.getElementById("kasView");
 
 // ================= STOK — PROSES CUCI / ISI ULANG GAS =================
 // Halaman ini khusus untuk menandai barang yang sudah selesai diproses (dicuci / diisi ulang gas)
@@ -3497,6 +3560,120 @@ function renderStok(){
       renderCatalog();
     });
   });
+}
+
+// ================= KAS HARIAN — RENDER =================
+let kasSelectedDate = todayISO();
+
+function renderKas(){
+  const date = kasSelectedDate;
+  const k = getKasHari(date);
+  const cashIn = cashInForDate(date);
+  const pengeluaranTotal = pengeluaranTotalForDate(date);
+  const expected = expectedCashForDate(date);
+  const isToday = date === todayISO();
+
+  let html = `
+    <div class="section-label">Kas Harian</div>
+    <input class="field" type="date" id="kasDateInput" value="${date}" style="margin-bottom:16px;">
+  `;
+
+  if(k.ditutup){
+    const selisih = k.selisih||0;
+    const selisihCls = selisih===0 ? "ok" : selisih>0 ? "warn" : "debt";
+    html += `
+      <div class="kas-summary-card">
+        <div class="kas-closed-tag">🔒 Kasir Sudah Ditutup — ${fmtDate(date)}</div>
+        <div class="kas-row"><span>Modal Awal</span><span class="mono">${fmt(k.modalAwal)}</span></div>
+        <div class="kas-row"><span>Uang Masuk (Cash)</span><span class="mono">${fmt(cashIn)}</span></div>
+        <div class="kas-row"><span>Pengeluaran</span><span class="mono">−${fmt(pengeluaranTotal)}</span></div>
+        <div class="kas-row kas-row-total"><span>Seharusnya di Laci</span><span class="mono">${fmt(expected)}</span></div>
+        <div class="kas-row"><span>Uang Fisik Dihitung</span><span class="mono">${fmt(k.uangFisik)}</span></div>
+        <div class="kas-row kas-row-total kas-${selisihCls}"><span>Selisih</span><span class="mono">${selisih>0?'+':''}${fmt(selisih)}</span></div>
+      </div>
+      <button class="add-item-toggle-btn" id="reopenKasBtn">🔓 Buka Lagi Kasir Hari Ini</button>
+    `;
+  } else {
+    html += `
+      <div class="section-label" style="margin-top:0;">Modal Awal</div>
+      <input class="field" type="number" min="0" id="kasModalAwal" value="${k.modalAwal||0}" placeholder="Contoh: 500000">
+
+      <div class="kas-summary-card" style="margin-top:16px;">
+        <div class="kas-row"><span>Uang Masuk (Cash) hari ini</span><span class="mono kas-ok">+${fmt(cashIn)}</span></div>
+        <div class="kas-row"><span>Total Pengeluaran</span><span class="mono kas-debt">−${fmt(pengeluaranTotal)}</span></div>
+        <div class="kas-row kas-row-total"><span>Seharusnya di Laci</span><span class="mono">${fmt(expected)}</span></div>
+      </div>
+
+      <div class="section-label">Pengeluaran</div>
+      <div id="kasPengeluaranList">
+        ${k.pengeluaran.length===0 ? `<div class="hint" style="margin:0 0 10px;">Belum ada pengeluaran dicatat.</div>` : k.pengeluaran.map(p=>`
+          <div class="kas-expense-row">
+            <div><div class="ke-desc">${p.desc}</div><div class="ke-time mono">${new Date(p.at).toLocaleTimeString("id-ID",{hour:'2-digit',minute:'2-digit'})}</div></div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="mono ke-amount">−${fmt(p.amount)}</span>
+              <button class="del-kas-expense-btn" data-id="${p.id}" aria-label="Hapus">✕</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <div class="kas-add-expense">
+        <input class="field" id="kasExpenseDesc" placeholder="Contoh: Beli tali tenda">
+        <input class="field" type="number" min="0" id="kasExpenseAmount" placeholder="Jumlah (Rp)">
+        <button class="add-product-btn" id="addKasExpenseBtn">+ Tambah</button>
+      </div>
+
+      <div class="section-label">Tutup Kasir</div>
+      <div class="hint">Hitung uang fisik di laci, masukkan jumlahnya, lalu tutup kasir. Selisih akan otomatis kehitung.</div>
+      <input class="field" type="number" min="0" id="kasUangFisik" placeholder="Jumlah uang fisik di laci (Rp)">
+      <button class="save-btn" id="closeKasBtn" style="margin-top:10px; width:100%;">🔒 Tutup Kasir Hari Ini</button>
+      ${!isToday ? `<div class="hint" style="color:var(--warn);">⚠️ Ini bukan tanggal hari ini — pastikan memang mau input untuk tanggal ${fmtDate(date)}.</div>` : ""}
+    `;
+  }
+
+  kasEl.innerHTML = html;
+
+  document.getElementById("kasDateInput").addEventListener("change", e=>{
+    kasSelectedDate = e.target.value || todayISO();
+    renderKas();
+  });
+
+  if(!k.ditutup){
+    document.getElementById("kasModalAwal").addEventListener("change", e=>{
+      setKasHari(date, { modalAwal: Math.max(0, parseInt(e.target.value)||0) });
+      renderKas();
+    });
+    document.getElementById("addKasExpenseBtn").addEventListener("click", ()=>{
+      const desc = document.getElementById("kasExpenseDesc").value.trim();
+      const amount = Math.max(0, parseInt(document.getElementById("kasExpenseAmount").value)||0);
+      if(!desc || amount<=0) return;
+      const cur = getKasHari(date);
+      const pengeluaran = [...cur.pengeluaran, { id:uid(), desc, amount, at:new Date().toISOString() }];
+      setKasHari(date, { pengeluaran });
+      renderKas();
+    });
+    kasEl.querySelectorAll(".del-kas-expense-btn").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const cur = getKasHari(date);
+        setKasHari(date, { pengeluaran: cur.pengeluaran.filter(p=>p.id!==btn.dataset.id) });
+        renderKas();
+      });
+    });
+    document.getElementById("closeKasBtn").addEventListener("click", ()=>{
+      const uangFisik = Math.max(0, parseInt(document.getElementById("kasUangFisik").value)||0);
+      const exp = expectedCashForDate(date);
+      showConfirm(`Tutup kasir untuk ${fmtDate(date)}? Selisih: ${fmt(uangFisik-exp)}. Tidak bisa diedit lagi kecuali dibuka ulang.`, ()=>{
+        setKasHari(date, { ditutup:true, uangFisik, selisih: uangFisik-exp, closedAt:new Date().toISOString() });
+        renderKas();
+      });
+    });
+  } else {
+    document.getElementById("reopenKasBtn").addEventListener("click", ()=>{
+      showConfirm(`Buka lagi kasir tanggal ${fmtDate(date)}?`, ()=>{
+        setKasHari(date, { ditutup:false });
+        renderKas();
+      });
+    });
+  }
 }
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
 
@@ -3884,6 +4061,10 @@ function renderHome(){
         <div class="menu-item-icon">🧺</div>
         <div class="menu-item-label">Stok</div>
       </div>
+      <div class="menu-item" data-tab="kas">
+        <div class="menu-item-icon">💰</div>
+        <div class="menu-item-label">Kas Harian</div>
+      </div>
     </div>
 
     <div class="home-active-filters">
@@ -4014,6 +4195,7 @@ function rerenderCurrentTab(){
   else if(activeTab==="laporan"){ renderLaporan(); }
   else if(activeTab==="dashboard"){ renderDashboard(); }
   else if(activeTab==="stok"){ renderStok(); }
+  else if(activeTab==="kas"){ renderKas(); }
   renderCartFab();
 }
 
@@ -4038,6 +4220,7 @@ if(firebaseEnabled){
     CATALOG.forEach(p=>{ if(productOverrides[p.id]) Object.assign(p, productOverrides[p.id]); });
   });
   attachFirestoreSync("basecamp_product_stock", v=>{ productStock = v; });
+  attachFirestoreSync("basecamp_kas_harian", v=>{ kasHarian = v; });
 
   // Foto produk disimpan di koleksi TERPISAH (1 dokumen per produk), bukan digabung seperti data di atas,
   // supaya ukuran tiap dokumen tetap kecil dan tidak gampang kena limit 1MB Firestore.
