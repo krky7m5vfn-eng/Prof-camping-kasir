@@ -16,10 +16,23 @@
   .ok{color:var(--ok);} .err{color:var(--brick);} .skip{color:var(--canvas-dim);}
   #progressBar{height:8px; background:var(--pine-light); border-radius:4px; margin-top:14px; overflow:hidden;}
   #progressFill{height:100%; background:var(--amber); width:0%; transition:width .2s;}
+  .field{width:100%; padding:11px 12px; border-radius:8px; border:1px solid var(--line); background:var(--pine-light); color:var(--canvas); font-size:14px; margin-bottom:10px; box-sizing:border-box;}
+  #loginBox{max-width:360px;}
+  #loginError{color:var(--brick); font-size:12.5px; margin-top:6px; min-height:16px;}
 </style>
 </head>
 <body>
 <h1>🔧 Migrasi Foto Produk ke Firebase Storage</h1>
+
+<div id="loginBox">
+  <div class="hint">Masuk dulu pakai email &amp; password admin yang sama dengan aplikasi utama (Prof Camping), supaya Firebase mengizinkan proses migrasi.</div>
+  <input class="field" type="email" id="loginEmail" placeholder="Email admin" autocomplete="username">
+  <input class="field" type="password" id="loginPassword" placeholder="Password" autocomplete="current-password">
+  <button id="loginBtn">Masuk</button>
+  <div id="loginError"></div>
+</div>
+
+<div id="migrasiBox" hidden>
 <div class="hint">
   Halaman sekali-pakai. Tekan tombol di bawah untuk memindahkan semua foto produk bawaan (yang tadinya numpuk di kode index.html)
   ke Firebase Storage, supaya index.html jadi ringan. Prosesnya aman: foto yang SUDAH pernah Anda ganti manual lewat aplikasi utama
@@ -29,8 +42,10 @@
 <button id="startBtn">▶ Mulai Migrasi</button>
 <div id="progressBar"><div id="progressFill"></div></div>
 <div id="log"></div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-storage-compat.js"></script>
 <script>
@@ -45,6 +60,31 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const storage = firebase.storage();
+const auth = firebase.auth ? firebase.auth() : null;
+
+// ================= LOGIN ADMIN (WAJIB, supaya Firebase mengizinkan tulis data) =================
+const loginBox = document.getElementById("loginBox");
+const migrasiBox = document.getElementById("migrasiBox");
+const loginEmail = document.getElementById("loginEmail");
+const loginPassword = document.getElementById("loginPassword");
+const loginBtn = document.getElementById("loginBtn");
+const loginError = document.getElementById("loginError");
+
+auth.onAuthStateChanged(user=>{
+  if(user){ loginBox.hidden = true; migrasiBox.hidden = false; }
+  else { loginBox.hidden = false; migrasiBox.hidden = true; }
+});
+function doLogin(){
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value;
+  if(!email || !password){ loginError.textContent = "Isi email dan password dulu."; return; }
+  loginBtn.disabled = true; loginBtn.textContent = "Memproses…"; loginError.textContent = "";
+  auth.signInWithEmailAndPassword(email, password)
+    .catch(()=>{ loginError.textContent = "Email atau password salah."; })
+    .finally(()=>{ loginBtn.disabled = false; loginBtn.textContent = "Masuk"; });
+}
+loginBtn.addEventListener("click", doLogin);
+loginPassword.addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
 
 // ================= DATA FOTO YANG AKAN DIMIGRASI (base64, cuma dipakai sekali di sini) =================
 const IMAGES_TO_MIGRATE = {
