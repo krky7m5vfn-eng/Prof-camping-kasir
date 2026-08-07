@@ -64,18 +64,20 @@
   .cols-options{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
   .cols-opt{flex:none; padding:5px 11px; border-radius:999px; border:1px solid var(--line); font-size:11px; font-family:'IBM Plex Mono',monospace; color:var(--canvas-dim); background:transparent; cursor:pointer;}
   .cols-opt.active{background:var(--amber); border-color:var(--amber); color:var(--pine); font-weight:600;}
-  .prod-card{background:var(--pine); border:1px solid var(--line); border-radius:11px; overflow:hidden; display:flex; flex-direction:column;}
+  /* container-type membuat tiap kartu jadi "container" sendiri — ukuran teks/tombol di bawah (satuan cqi)
+     dihitung dari LEBAR KARTU itu sendiri, jadi otomatis mengecil proporsional saat kolom makin banyak */
+  .prod-card{container-type:inline-size; background:var(--pine); border:1px solid var(--line); border-radius:11px; overflow:hidden; display:flex; flex-direction:column;}
   .prod-card-img{width:100%; aspect-ratio:1/1; background:var(--pine-light); display:flex; align-items:center; justify-content:center; overflow:hidden;}
   .prod-card-img img{width:100%; height:100%; object-fit:cover; display:block;}
-  .prod-card-img .ph{font-size:26px; opacity:0.35;}
-  .prod-card-body{padding:9px 10px 10px;}
-  .prod-name{font-weight:600; font-size:12.5px; line-height:1.3; min-height:32px;}
-  .prod-price{font-family:'IBM Plex Mono'; font-size:11px; color:var(--amber-bright); margin-top:4px;}
-  .prod-stock-hint{font-family:'IBM Plex Mono'; font-size:9.5px; color:var(--canvas-dim); margin-top:1px;}
-  .add-btn{width:100%; margin-top:8px; padding:8px; border-radius:8px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-size:13px; font-weight:700; cursor:pointer;}
+  .prod-card-img .ph{font-size:clamp(14px,22cqi,26px); opacity:0.35;}
+  .prod-card-body{padding:clamp(5px,6cqi,9px) clamp(6px,7cqi,10px) clamp(7px,8cqi,10px);}
+  .prod-name{font-weight:600; font-size:clamp(9.5px,10.5cqi,12.5px); line-height:1.25; min-height:2.4em;}
+  .prod-price{font-family:'IBM Plex Mono'; font-size:clamp(8.5px,9cqi,11px); color:var(--amber-bright); margin-top:4px;}
+  .prod-stock-hint{font-family:'IBM Plex Mono'; font-size:clamp(7.5px,7.5cqi,9.5px); color:var(--canvas-dim); margin-top:1px;}
+  .add-btn{width:100%; margin-top:8px; padding:clamp(5px,6cqi,8px); border-radius:8px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-size:clamp(9.5px,10cqi,13px); font-weight:700; cursor:pointer;}
   .stepper{display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:8px;}
-  .stepper button{width:30px; height:30px; border-radius:8px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-size:16px; cursor:pointer; flex:none;}
-  .stepper .val{font-family:'IBM Plex Mono'; font-weight:600; text-align:center; flex:1;}
+  .stepper button{width:clamp(22px,24cqi,30px); height:clamp(22px,24cqi,30px); border-radius:8px; border:1px solid var(--amber); background:transparent; color:var(--amber-bright); font-size:clamp(12px,14cqi,16px); cursor:pointer; flex:none;}
+  .stepper .val{font-family:'IBM Plex Mono'; font-weight:600; text-align:center; flex:1; font-size:clamp(10px,11cqi,14px);}
   .cart-summary{margin-top:10px; padding-top:10px; border-top:1px dashed var(--line);}
   .cart-line{display:flex; justify-content:space-between; font-size:12.5px; padding:4px 0;}
 
