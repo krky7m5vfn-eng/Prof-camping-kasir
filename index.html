@@ -825,6 +825,28 @@ function downloadBackup(){
   URL.revokeObjectURL(url);
 }
 
+// Memulihkan data dari file backup .json (hasil downloadBackup di atas). Mengganti data lokal DAN
+// mendorongnya ke Firebase (lewat save(), yang otomatis sinkron kalau firebaseEnabled) supaya semua
+// device yang tersambung ikut menerima data yang dipulihkan.
+function restoreBackup(backupData){
+  if(backupData.basecamp_customers) customers = backupData.basecamp_customers;
+  if(backupData.basecamp_transactions) transactions = backupData.basecamp_transactions;
+  if(backupData.basecamp_deleted_transactions) deletedTransactions = backupData.basecamp_deleted_transactions;
+  if(backupData.basecamp_bookings) bookings = backupData.basecamp_bookings;
+  if(backupData.basecamp_custom_products) customProducts = backupData.basecamp_custom_products;
+  if(backupData.basecamp_product_overrides){
+    productOverrides = backupData.basecamp_product_overrides;
+    CATALOG.forEach(p=>{ if(productOverrides[p.id]) Object.assign(p, productOverrides[p.id]); });
+  }
+  if(backupData.basecamp_product_stock) productStock = backupData.basecamp_product_stock;
+  if(backupData.basecamp_kas_harian) kasHarian = backupData.basecamp_kas_harian;
+
+  FIRESTORE_SYNCED_KEYS.forEach(key=>{
+    if(backupData[key]!==undefined) save(key, backupData[key]);
+  });
+  rerenderCurrentTab();
+}
+
 // ================= KONEKSI KE GOOGLE SHEETS (rekap transaksi otomatis) =================
 // Isi dengan URL "Web app" hasil deploy Google Apps Script (lihat panduan setup dari Claude).
 // Selama masih "GANTI_DENGAN_URL_APPS_SCRIPT", fitur ini otomatis nonaktif dan tidak memengaruhi aplikasi sama sekali.
@@ -3104,6 +3126,11 @@ function toleransiLine(endDateIso){
   return `⏰ Pada hari ${dayName} kami buka pukul ${storeHoursForDate(endDateIso)}, tapi toleransi pengembalian bisa sampai pukul 20:00 yah\n`;
 }
 
+function buildReturnReminderMessage(t){
+  const itemsList = t.items.map(i=>`${i.name} ×${i.qty}`).join(", ");
+  return `Halo ${t.customer.name||'Kak'}, 👋\n\nPengingat dari Prof Camping — sewa alat kamu (${itemsList}) batas pengembaliannya *HARI INI, jam 20:00 WITA*.\n\nMohon dikembalikan tepat waktu ya, biar bisa segera kami cek & bersihkan untuk penyewa berikutnya. Keterlambatan akan dikenakan biaya sewa tambahan sesuai ketentuan yang berlaku.\n\nTerima kasih! 🙏`;
+}
+
 function buildReceiptMessage(t){
   const div = "━━━━━━━━━━━━━━━";
   const payLabel = t.payment.status==='hutang' ? 'BELUM BAYAR' : t.payment.status==='sebagian' ? 'DIBAYAR SEBAGIAN' : 'LUNAS';
@@ -4284,6 +4311,10 @@ function renderHome(){
     const diffH = (end-now)/36e5;
     return diffH>=0 && diffH<=24;
   });
+  // Pengingat pengembalian: batas SEMUA alat jam 20:00 WITA di tanggal endDate, berapa pun jam
+  // pengambilannya. Baru ditampilkan mulai jam 15:00 (3 sore) supaya nggak muncul kepagian.
+  const dueTodayAktif = aktif.filter(t=> t.endDate===todayStr);
+  const showReturnReminder = now.getHours()>=15 && dueTodayAktif.length>0;
 
   const payBadge = { lunas:["Lunas","badge-lunas"], sebagian:["Sebagian","badge-sebagian"], hutang:["Belum Bayar","badge-hutang"] };
   // Daftar transaksi di dashboard utama: transaksi hari ini (diurutkan terbaru dulu); kalau hari ini
@@ -4333,6 +4364,19 @@ function renderHome(){
       </div>
     </div>
 
+    ${showReturnReminder ? `
+    <div class="kas-summary-card" style="border-color:var(--brick); margin-bottom:16px;">
+      <div class="kas-closed-tag" style="color:var(--brick);">⏰ ${dueTodayAktif.length} Transaksi Harus Balik Hari Ini — Batas 20:00 WITA</div>
+      ${dueTodayAktif.map(t=>`
+        <div class="prod-row">
+          <div style="min-width:0;">
+            <div class="pn">${t.customer.name || 'Tanpa Nama'}</div>
+            <div class="pmeta">${t.items.map(i=>i.name+' ×'+i.qty).join(', ')}</div>
+          </div>
+          <button data-remind-btn="${t.id}" style="background:var(--ok); border:none; border-radius:8px; color:var(--pine); font-size:11px; font-weight:600; padding:6px 10px; cursor:pointer; flex:none;">WA</button>
+        </div>`).join("")}
+    </div>` : ""}
+
     <div class="section-label">Menu</div>
     <div class="menu-grid">
       <div class="menu-item" data-tab="katalog">
@@ -4363,6 +4407,11 @@ function renderHome(){
         <div class="menu-item-icon">💾</div>
         <div class="menu-item-label">Backup Data</div>
       </div>
+      <div class="menu-item" id="restoreDataBtn">
+        <div class="menu-item-icon">♻️</div>
+        <div class="menu-item-label">Pulihkan Backup</div>
+      </div>
+      <input type="file" id="restoreFileInput" accept=".json,application/json" style="display:none;">
     </div>
 
     <div class="home-active-filters">
@@ -4397,6 +4446,39 @@ function renderHome(){
   });
   const backupBtn = document.getElementById("backupDataBtn");
   if(backupBtn) backupBtn.addEventListener("click", downloadBackup);
+  homeEl.querySelectorAll("[data-remind-btn]").forEach(btn=>{
+    btn.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const t = transactions.find(x=>x.id===btn.dataset.remindBtn);
+      if(!t) return;
+      window.open(`https://wa.me/${t.customer.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(buildReturnReminderMessage(t))}`, "_blank");
+    });
+  });
+  const restoreBtn = document.getElementById("restoreDataBtn");
+  const restoreFileInput = document.getElementById("restoreFileInput");
+  if(restoreBtn && restoreFileInput){
+    restoreBtn.addEventListener("click", ()=> restoreFileInput.click());
+    restoreFileInput.addEventListener("change", (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev)=>{
+        let parsed;
+        try{ parsed = JSON.parse(ev.target.result); }
+        catch(err){ alert("File backup tidak valid atau rusak, tidak bisa dibaca."); return; }
+        if(!parsed || typeof parsed!=="object" || !parsed.data || typeof parsed.data!=="object"){
+          alert("Format file ini bukan file backup Prof Camping yang dikenali.");
+          return;
+        }
+        const madeInfo = parsed.exportedAt ? ` File ini dibuat pada ${fmtDateFull((parsed.exportedAt||"").slice(0,10))}.` : "";
+        showConfirm(`Pulihkan data dari file backup ini?${madeInfo} SEMUA data yang ada di aplikasi sekarang (transaksi, pelanggan, booking, kas harian, dll) akan DIGANTI dengan isi file backup ini dan tidak bisa dibatalkan.`, ()=>{
+          restoreBackup(parsed.data);
+        });
+      };
+      reader.readAsText(file);
+      e.target.value = "";
+    });
+  }
 }
 
 function renderDashboard(){
