@@ -14,6 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-auth-compat.js"></script>
 <style>
   :root{
     --pine:#1B1512; --pine-light:#26201B; --canvas:#F1E4D2; --canvas-dim:#C7B49C;
@@ -119,10 +120,31 @@
   .status-offline{background:rgba(201,162,39,0.18); color:var(--warn);}
   .status-online{background:rgba(127,168,79,0.18); color:var(--ok);}
   .empty{padding:16px; text-align:center; color:var(--canvas-dim); font-size:13px;}
+
+  #loginScreen{max-width:360px; margin:40px auto; padding:0 14px;}
+  #loginScreen .section{text-align:left;}
+  #loginError{color:#E2917F; font-size:12.5px; margin-top:8px; min-height:16px;}
+  .login-submit-btn{width:100%; padding:13px; border-radius:10px; border:none; background:var(--amber); color:var(--pine); font-family:'IBM Plex Mono'; font-weight:700; font-size:13.5px; cursor:pointer; margin-top:4px;}
+  .login-submit-btn:disabled{opacity:0.5;}
+  .logout-btn{position:fixed; top:14px; right:14px; z-index:25; background:none; border:1px solid var(--line); color:var(--canvas-dim); border-radius:8px; padding:6px 10px; font-family:'IBM Plex Mono'; font-size:10.5px; cursor:pointer;}
 </style>
 </head>
 <body>
 
+<div id="loginScreen">
+  <div class="section">
+    <div class="section-title" style="margin-bottom:6px;">🔒 Login Admin</div>
+    <div class="hint">Masuk pakai email &amp; password yang sama dengan aplikasi utama Prof Camping.</div>
+    <input class="field" type="email" id="loginEmail" placeholder="Email admin" autocomplete="username" style="margin-bottom:8px;">
+    <input class="field" type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" style="margin-bottom:10px;">
+    <button class="login-submit-btn" id="loginBtn">Masuk</button>
+    <div id="loginError"></div>
+  </div>
+</div>
+
+<button class="logout-btn" id="logoutBtn" hidden>Keluar</button>
+
+<div id="appScreen" hidden>
 <header>
   <h1>🧾 Kasir Cepat</h1>
   <div class="tagline">PROF CAMPING · TRANSAKSI &amp; TUKAR GAS</div>
@@ -189,6 +211,7 @@
     <button class="new-txn-btn" id="newTxnBtn">+ Transaksi Baru</button>
   </div>
 </main>
+</div>
 
 <script>
 // ================= FIREBASE (project sama dengan aplikasi admin Prof Camping) =================
@@ -693,7 +716,6 @@ document.getElementById("submitBtn").addEventListener("click", async ()=>{
 
     const txn = {
       id: uid(),
-      no: nextTxnNo(),
       customer,
       items: entries.map(e=>({ name:e.product.name, price:e.product.price, qty:e.qty })),
       durationDays, startDate, endDate: addDays(startDate, durationDays),
@@ -710,9 +732,23 @@ document.getElementById("submitBtn").addEventListener("click", async ()=>{
       source: "kasir-cepat",
       createdAt: new Date().toISOString()
     };
-    const newTransactions = [txn, ...transactions];
-    await db.collection("prof_camping_data").doc("basecamp_transactions").set({ value: newTransactions, updatedAt: Date.now() });
-    transactions = newTransactions;
+    // Simpan pakai Firestore Transaction (bukan tulis-ulang dari data lokal) — ini SELALU baca data
+    // TERBARU dari server dulu sebelum nambahkan transaksi baru (termasuk nomor urutnya), jadi walau
+    // tab ini sempat lama tidak aktif/background (data lokalnya ketinggalan), transaksi lain yang masuk
+    // di antaranya TIDAK akan tertimpa maupun bentrok nomor.
+    const txnRef = db.collection("prof_camping_data").doc("basecamp_transactions");
+    await db.runTransaction(async (tx)=>{
+      const snap = await tx.get(txnRef);
+      const currentServer = snap.exists ? (snap.data().value||[]) : [];
+      let maxNum = 0;
+      currentServer.forEach(t=>{
+        const m = /^TRX-(\d+)$/.exec(t.no||"");
+        if(m) maxNum = Math.max(maxNum, parseInt(m[1],10));
+      });
+      txn.no = "TRX-" + String(maxNum+1).padStart(4,"0");
+      tx.set(txnRef, { value: [txn, ...currentServer], updatedAt: Date.now() });
+    });
+    // transactions lokal akan ikut ter-update otomatis lewat listener onSnapshot sesaat lagi
 
     lastCreatedTxn = txn;
     document.getElementById("confirmNo").textContent = txn.no;
@@ -742,8 +778,48 @@ document.getElementById("newTxnBtn").addEventListener("click", ()=>{
   window.scrollTo(0,0);
 });
 
-// ================= SINKRONISASI REALTIME =================
+// ================= LOGIN ADMIN (WAJIB, supaya Firestore mengizinkan simpan transaksi) =================
+const loginScreen = document.getElementById("loginScreen");
+const appScreen = document.getElementById("appScreen");
+const logoutBtn = document.getElementById("logoutBtn");
+const loginEmail = document.getElementById("loginEmail");
+const loginPassword = document.getElementById("loginPassword");
+const loginBtn = document.getElementById("loginBtn");
+const loginError = document.getElementById("loginError");
+let auth = null, syncStarted = false;
+
 if(firebaseEnabled){
+  try{ auth = firebase.auth(); }catch(err){ console.error("Gagal menyiapkan login.", err); }
+}
+
+if(firebaseEnabled && auth){
+  auth.onAuthStateChanged(user=>{
+    if(user){
+      loginScreen.hidden = true; appScreen.hidden = false; logoutBtn.hidden = false;
+      if(!syncStarted){ syncStarted = true; startSync(); }
+    } else {
+      loginScreen.hidden = false; appScreen.hidden = true; logoutBtn.hidden = true;
+    }
+  });
+  function doLogin(){
+    const email = loginEmail.value.trim();
+    const password = loginPassword.value;
+    if(!email || !password){ loginError.textContent = "Isi email dan password dulu."; return; }
+    loginBtn.disabled = true; loginBtn.textContent = "Memproses…"; loginError.textContent = "";
+    auth.signInWithEmailAndPassword(email, password)
+      .catch(()=>{ loginError.textContent = "Email atau password salah."; })
+      .finally(()=>{ loginBtn.disabled = false; loginBtn.textContent = "Masuk"; });
+  }
+  loginBtn.addEventListener("click", doLogin);
+  loginPassword.addEventListener("keydown", e=>{ if(e.key==="Enter") doLogin(); });
+  logoutBtn.addEventListener("click", ()=>{ auth.signOut(); });
+} else {
+  // Firebase/login belum siap: tetap tampilkan pesan di layar login, tidak bisa lanjut
+  document.getElementById("loginScreen").querySelector(".hint").textContent = "Tidak bisa konek ke server login. Cek koneksi internet lalu buka ulang halaman ini.";
+}
+
+// ================= SINKRONISASI REALTIME (baru jalan setelah login berhasil) =================
+function startSync(){
   const statusPill = document.getElementById("statusPill");
   let ready = { overrides:false, custom:false, stock:false, txn:false, cust:false };
   function checkReady(){
@@ -780,10 +856,6 @@ if(firebaseEnabled){
     });
     renderProdList();
   });
-} else {
-  document.getElementById("statusPill").textContent = "Gagal Konek Firebase";
-  document.getElementById("statusPill").className = "status-pill status-offline";
-  document.getElementById("prodList").innerHTML = `<div class="empty">Tidak bisa konek ke server. Cek koneksi internet lalu buka ulang halaman ini.</div>`;
 }
 </script>
 </body>

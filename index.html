@@ -114,6 +114,7 @@
   .sb-bersih{background:rgba(127,168,79,0.18); color:var(--ok);}
   .sb-keluar{background:rgba(201,162,39,0.18); color:var(--warn);}
   .sb-kotor{background:rgba(179,59,46,0.18); color:var(--brick);}
+  .sb-sewa{background:rgba(194,98,42,0.18); color:var(--amber-bright);}
 
   .stok-hint{font-family:'Work Sans'; font-size:12.5px; color:var(--canvas-dim); margin:-6px 0 12px;}
   .stok-row{display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--pine-light); border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:8px; flex-wrap:wrap;}
@@ -593,6 +594,9 @@
       <div class="section-label">Gaji Karyawan per Tenda Dicuci (Rp)</div>
       <input class="field" type="number" min="0" id="newProdGajiCuci" placeholder="Contoh: 15000">
     </div>
+    <div class="section-label">Angka Dasar "Pernah Disewa" (opsional)</div>
+    <input class="field" type="number" min="0" id="newProdSewaBase" placeholder="Contoh: 107">
+    <div class="hint" style="margin:-6px 0 12px;">Angka awal biar kelihatan udah sering dipakai (ditambah otomatis dari riwayat transaksi asli, ditampilkan di halaman Booking Online).</div>
     <div class="section-label">Foto Produk (opsional)</div>
     <input class="field" type="file" accept="image/*" id="newProdImageInput">
     <div id="newProdImagePreviewWrap" style="display:none; margin-top:8px; align-items:center; gap:10px;">
@@ -976,6 +980,37 @@ function save(key, val){
   }
 }
 
+// Menambahkan transaksi BARU secara aman: SELALU baca data transaksi TERBARU dari server dulu (bukan
+// dari data lokal yang bisa ketinggalan kalau tab sempat lama tidak aktif/background), baru ditambahkan
+// transaksi barunya di situ. Ini mencegah transaksi yang dibuat aplikasi lain (mis. Kasir Cepat) di waktu
+// hampir bersamaan tidak sengaja tertimpa/hilang. Dipakai untuk transaksi baru & aktivasi booking.
+async function addNewTransactionSafely(txnWithoutNo){
+  if(!(firebaseEnabled && db)){
+    // offline / firebase tidak aktif: fallback ke cara lama (lokal saja)
+    txnWithoutNo.no = nextTxnNo();
+    transactions.unshift(txnWithoutNo);
+    save("basecamp_transactions", transactions);
+    return txnWithoutNo;
+  }
+  const txnRef = db.collection("prof_camping_data").doc("basecamp_transactions");
+  await db.runTransaction(async (tx)=>{
+    const snap = await tx.get(txnRef);
+    const currentServer = snap.exists ? (snap.data().value||[]) : [];
+    let maxNum = 0;
+    currentServer.forEach(t=>{
+      const m = /^TRX-(\d+)$/.exec(t.no||"");
+      if(m) maxNum = Math.max(maxNum, parseInt(m[1],10));
+    });
+    txnWithoutNo.no = "TRX-" + String(maxNum+1).padStart(4,"0");
+    tx.set(txnRef, { value: [txnWithoutNo, ...currentServer], updatedAt: Date.now() });
+  });
+  // update tampilan lokal juga (listener onSnapshot akan menyusul & menyamakan lagi sesaat kemudian)
+  if(!transactions.some(t=>t.id===txnWithoutNo.id)) transactions.unshift(txnWithoutNo);
+  try{ localStorage.setItem("basecamp_transactions", JSON.stringify(transactions)); }catch(e){}
+  if(googleSheetsEnabled) syncTransactionsToSheetDebounced(transactions);
+  return txnWithoutNo;
+}
+
 let customers = load("basecamp_customers", []);      // [{id,name,phone}]
 let transactions = load("basecamp_transactions", []); // [{id,no,customer,items,durationDays,startDate,endDate,payment:{status,paidAmount,method},status,createdAt}]
 let deletedTransactions = load("basecamp_deleted_transactions", []); // riwayat transaksi yang dihapus (soft-delete), tetap tersimpan & bisa dipulihkan
@@ -984,11 +1019,15 @@ let bookings = load("basecamp_bookings", []);         // [{id,customer,items,dur
 // ---------- nomor transaksi (rapi & mudah dibaca, terpisah dari "id" internal yang dipakai untuk lookup) ----------
 // id (uid()) tetap dipakai sebagai kunci unik internal di seluruh kode (pencarian, relasi booking, dsb),
 // sedangkan "no" adalah nomor transaksi yang ditampilkan ke pengguna, formatnya TRX-0001, TRX-0002, dst.
-let txnCounter = load("basecamp_txn_counter", 0);
+// Nomor transaksi TRX-#### dihitung dari nomor tertinggi yang SUDAH ADA di data transaksi (bukan counter lokal per-HP),
+// supaya tidak bentrok kalau ada beberapa aplikasi (app utama, kasir cepat, dll) yang sama-sama bisa bikin transaksi baru.
 function nextTxnNo(){
-  txnCounter++;
-  save("basecamp_txn_counter", txnCounter);
-  return "TRX-" + String(txnCounter).padStart(4, "0");
+  let maxNum = 0;
+  transactions.forEach(t=>{
+    const m = /^TRX-(\d+)$/.exec(t.no||"");
+    if(m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+  });
+  return "TRX-" + String(maxNum+1).padStart(4, "0");
 }
 function txnNo(t){ return (t && t.no) ? t.no : (t ? t.id : ""); }
 // "bola" penanda pelanggan: lingkaran kecil berisi inisial nama, warnanya konsisten per nama
@@ -1043,11 +1082,11 @@ function defaultJenisProses(name, cat){
 }
 function getStock(product){
   const s = productStock[product.id];
-  if(s) return Object.assign({ gajiCuci:0 }, s);
-  return { total:0, bersih:0, jenisProses: defaultJenisProses(product.name, product.cat), gajiCuci:0 };
+  if(s) return Object.assign({ gajiCuci:0, sewaBase:0 }, s);
+  return { total:0, bersih:0, jenisProses: defaultJenisProses(product.name, product.cat), gajiCuci:0, sewaBase:0 };
 }
 function setStock(id, patch){
-  const current = productStock[id] || { total:0, bersih:0, jenisProses:"none", gajiCuci:0 };
+  const current = productStock[id] || { total:0, bersih:0, jenisProses:"none", gajiCuci:0, sewaBase:0 };
   productStock[id] = Object.assign({}, current, patch);
   save("basecamp_product_stock", productStock);
 }
@@ -1067,6 +1106,16 @@ function jenisProsesLabel(jp){
 }
 function jenisProsesFullLabel(jp){
   return jp==="gas" ? "Wajib Isi Ulang Gas" : jp==="cuci" ? "Wajib Dicuci" : "Barang Biasa";
+}
+// Jumlah "pernah disewa" (per unit per hari) — buat social proof di halaman booking online.
+// = Angka Dasar (diisi manual, tidak pernah berkurang) + hitungan OTOMATIS dari semua transaksi yang pernah terjadi
+// (qty barang × jumlah hari sewa tiap transaksi). Tidak menghitung transaksi yang sudah dihapus.
+function rentalCount(product){
+  const base = getStock(product).sewaBase || 0;
+  const auto = transactions.reduce((sum,t)=>{
+    return sum + (t.items||[]).filter(i=>i.name===product.name).reduce((s,i)=>s + i.qty*(t.durationDays||1), 0);
+  }, 0);
+  return base + auto;
 }
 
 // ================= KAS HARIAN (LACI) =================
@@ -1381,6 +1430,7 @@ const newProdStockBersih = document.getElementById("newProdStockBersih");
 const newProdJenisProses = document.getElementById("newProdJenisProses");
 const newProdGajiCuciWrap = document.getElementById("newProdGajiCuciWrap");
 const newProdGajiCuci = document.getElementById("newProdGajiCuci");
+const newProdSewaBase = document.getElementById("newProdSewaBase");
 const newProdStockInfo = document.getElementById("newProdStockInfo");
 function updateGajiCuciVisibility(){
   newProdGajiCuciWrap.style.display = newProdCat.value.trim()==="Tenda" ? "" : "none";
@@ -1489,9 +1539,10 @@ function openProductDrawer(product){
   newProdStockBersih.value = product ? stock.bersih : "";
   newProdJenisProses.value = stock.jenisProses;
   newProdGajiCuci.value = product ? (stock.gajiCuci||0) : "";
+  newProdSewaBase.value = product ? (stock.sewaBase||0) : "";
   updateGajiCuciVisibility();
   newProdStockInfo.textContent = product
-    ? `Keluar (transaksi aktif): ${stockKeluar(product.name)} · ${jenisProsesLabel(stock.jenisProses)} (dihitung otomatis): ${stockKotor(product)}`
+    ? `Keluar (transaksi aktif): ${stockKeluar(product.name)} · ${jenisProsesLabel(stock.jenisProses)} (dihitung otomatis): ${stockKotor(product)} · Pernah disewa: ${rentalCount(product)}x`
     : "";
   newProdError.textContent = "";
   newProdImageInput.value = "";
@@ -1520,6 +1571,7 @@ saveProductBtn.addEventListener("click", ()=>{
   const stockBersih = Math.max(0, Math.min(stockTotal, parseInt(newProdStockBersih.value) || 0));
   const jenisProses = newProdJenisProses.value;
   const gajiCuci = Math.max(0, parseInt(newProdGajiCuci.value) || 0);
+  const sewaBase = Math.max(0, parseInt(newProdSewaBase.value) || 0);
 
   if(editingProductId){
     if(editingProductId.startsWith("c")){
@@ -1535,14 +1587,14 @@ saveProductBtn.addEventListener("click", ()=>{
         save("basecamp_product_overrides", productOverrides);
       }
     }
-    setStock(editingProductId, { total: stockTotal, bersih: stockBersih, jenisProses, gajiCuci });
+    setStock(editingProductId, { total: stockTotal, bersih: stockBersih, jenisProses, gajiCuci, sewaBase });
     if(pendingProductImage===null) deleteProductImage(editingProductId);
     else if(typeof pendingProductImage==="string") saveProductImage(editingProductId, pendingProductImage);
   } else {
     const product = { id: "c"+uid(), name, cat, price, unit: "Hari" };
     customProducts.push(product);
     save("basecamp_custom_products", customProducts);
-    setStock(product.id, { total: stockTotal, bersih: stockBersih, jenisProses, gajiCuci });
+    setStock(product.id, { total: stockTotal, bersih: stockBersih, jenisProses, gajiCuci, sewaBase });
     if(typeof pendingProductImage==="string") saveProductImage(product.id, pendingProductImage);
   }
 
@@ -1551,7 +1603,9 @@ saveProductBtn.addEventListener("click", ()=>{
 });
 function stockBadgeHtml(p){
   const s = getStock(p);
-  if(s.total<=0) return "";
+  const count = rentalCount(p);
+  const countBadge = count>0 ? `<span class="sb-item sb-sewa">🔥 ${count}x disewa</span>` : "";
+  if(s.total<=0) return countBadge ? `<div class="stock-badge">${countBadge}</div>` : "";
   const keluar = stockKeluar(p.name);
   const kotor = stockKotor(p);
   const kotorLabel = jenisProsesLabel(s.jenisProses);
@@ -1559,6 +1613,7 @@ function stockBadgeHtml(p){
     <span class="sb-item sb-bersih">B ${s.bersih}</span>
     <span class="sb-item sb-keluar">K ${keluar}</span>
     <span class="sb-item sb-kotor" title="${kotorLabel}">${s.jenisProses==='gas'?'Ksg':'Ktr'} ${kotor}</span>
+    ${countBadge}
   </div>`;
 }
 function cardHtml(p){
@@ -2012,7 +2067,7 @@ function renderCheckout(){
   }
 }
 
-saveBtn.addEventListener("click", ()=>{
+saveBtn.addEventListener("click", async ()=>{
   const entries = cartEntries();
   if(entries.length===0) return;
 
@@ -2123,7 +2178,6 @@ saveBtn.addEventListener("click", ()=>{
 
     const txn = {
       id: uid(),
-      no: nextTxnNo(),
       customer,
       items: entries.map(e=>({name:e.product.name, price:e.product.price, qty:e.qty})),
       durationDays: draft.durationDays,
@@ -2141,8 +2195,7 @@ saveBtn.addEventListener("click", ()=>{
       fromBookingId: b ? b.id : null,
       createdAt: new Date().toISOString()
     };
-    transactions.unshift(txn);
-    save("basecamp_transactions", transactions);
+    await addNewTransactionSafely(txn);
 
     if(b){
       b.status = "diaktifkan";
@@ -2194,7 +2247,6 @@ saveBtn.addEventListener("click", ()=>{
 
   const txn = {
     id: uid(),
-    no: nextTxnNo(),
     customer,
     items: entries.map(e=>({name:e.product.name, price:e.product.price, qty:e.qty})),
     durationDays: draft.durationDays,
@@ -2211,8 +2263,7 @@ saveBtn.addEventListener("click", ()=>{
     jaminanReturned: false,
     createdAt: new Date().toISOString()
   };
-  transactions.unshift(txn);
-  save("basecamp_transactions", transactions);
+  await addNewTransactionSafely(txn);
   finishAndGoTo("transaksi", null);
 });
 
@@ -3076,11 +3127,13 @@ function renderBooking(){
           <div class="badges">
             <span class="badge badge-${b.status}">${statusLabel}</span>
             <span class="badge badge-method">${methodLabel(b.paymentMethod)}</span>
+            ${b.source==='booking-online' ? `<span class="badge" style="background:rgba(194,98,42,0.18); color:var(--amber-bright);">DARI BOOKING ONLINE</span>` : ''}
           </div>
         </div>
         <div class="txn-dates">${fmtDateFull(b.startDate)} → ${fmtDateFull(b.endDate)} · ${b.durationDays} hari</div>
         ${b.jaminan && b.jaminan.type!=='none' ? `<div class="txn-dates">Jaminan: ${jaminanLabel(b.jaminan)}</div>` : ''}
         <div class="txn-items">${itemsStr}</div>
+        ${b.note ? `<div class="txn-dates" style="color:var(--amber-bright);">💬 Catatan pelanggan: "${b.note}"</div>` : ''}
         ${b.discount && b.discount.amount>0 ? `<div class="txn-items" style="margin-top:-6px">Subtotal ${fmt(b.subtotal)} · Diskon −${fmt(b.discount.amount)}</div>` : ''}
         <div class="txn-total">${fmt(b.total)} <span style="font-size:12px; color:var(--canvas-dim); font-family:'IBM Plex Mono'">(DP ${fmt(b.dp||0)} · sisa ${fmt(sisa)})</span></div>
         <div class="txn-actions">
