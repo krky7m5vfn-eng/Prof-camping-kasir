@@ -667,13 +667,25 @@
   <div class="drawer-head"><h2>Catat Pembayaran</h2><button id="closeBayarDrawer">TUTUP ✕</button></div>
   <div class="drawer-body">
     <div class="date-summary" id="bayarInfo"></div>
-    <div class="section-label">Nominal Diterima (Rp)</div>
-    <input class="field" type="number" min="0" id="bayarAmount" placeholder="Contoh: 50000">
-    <div class="section-label">Metode Bayar</div>
-    <div class="dur-chips">
-      <button class="dur-chip active" data-bm="cash">Cash</button>
-      <button class="dur-chip" data-bm="qris">QRIS</button>
-      <button class="dur-chip" data-bm="transfer">Transfer</button>
+    <div class="cust-toggle">
+      <button class="active" id="bayarModeSingleBtn" data-splitmode="single">1 Metode</button>
+      <button id="bayarModeMultiBtn" data-splitmode="multi">Split Beberapa Metode</button>
+    </div>
+    <div id="bayarSingleWrap">
+      <div class="section-label">Nominal Diterima (Rp)</div>
+      <input class="field" type="number" min="0" id="bayarAmount" placeholder="Contoh: 50000">
+      <div class="section-label">Metode Bayar</div>
+      <div class="dur-chips">
+        <button class="dur-chip active" data-bm="cash">Cash</button>
+        <button class="dur-chip" data-bm="qris">QRIS</button>
+        <button class="dur-chip" data-bm="transfer">Transfer</button>
+      </div>
+    </div>
+    <div id="bayarSplitWrap" style="display:none;">
+      <div class="section-label">Rincian per Metode</div>
+      <div id="bayarSplitRows"></div>
+      <button type="button" id="addSplitRowBtn" class="add-item-toggle-btn">+ Tambah Metode</button>
+      <div class="date-summary" id="bayarSplitSummary"></div>
     </div>
     <div class="section-label">Tanggal Diterima</div>
     <div class="dur-chips" style="margin-bottom:6px;">
@@ -2018,7 +2030,7 @@ function renderCheckout(){
       <div class="section-label">Status Pembayaran</div>
       <div class="pay-toggle">${payHtml}</div>
       ${draft.payment.status==="sebagian" ? `
-        <input class="field" type="number" min="0" id="paidAmount" placeholder="Jumlah sudah dibayar" value="${draft.payment.paidAmount||''}">
+        <input class="field" type="number" min="0" max="${grandTotal}" id="paidAmount" placeholder="Jumlah sudah dibayar" value="${draft.payment.paidAmount||''}">
         <div class="date-summary">Sisa tagihan: <b>${fmt(Math.max(0, grandTotal - (draft.payment.paidAmount||0)))}</b></div>
       ` : ""}
       <div class="section-label">Metode Pembayaran</div>
@@ -2143,7 +2155,18 @@ function renderCheckout(){
     btn.addEventListener("click", ()=>{ draft.payment.status = btn.dataset.pay; renderCheckout(); });
   });
   const paidAmount = document.getElementById("paidAmount");
-  if(paidAmount) paidAmount.addEventListener("input", e=>{ draft.payment.paidAmount = parseInt(e.target.value)||0; renderCheckout(); });
+  if(paidAmount) paidAmount.addEventListener("input", e=>{
+    let v = parseInt(e.target.value)||0;
+    // Kalau nominal yang diketik sudah menyamai/melebihi total, otomatis pindah status ke "Lunas"
+    // supaya tidak ada lagi transaksi "Sebagian" yang sebenarnya nominalnya sudah lunas/lebih.
+    if(v >= grandTotal && grandTotal>0){
+      draft.payment.status = "lunas";
+      draft.payment.paidAmount = 0;
+    } else {
+      draft.payment.paidAmount = Math.max(0, v);
+    }
+    renderCheckout();
+  });
   const dpAmount = document.getElementById("dpAmount");
   if(dpAmount) dpAmount.addEventListener("input", e=>{ draft.dp = parseInt(e.target.value)||0; renderCheckout(); });
 
@@ -2231,8 +2254,10 @@ saveBtn.addEventListener("click", async ()=>{
       t.subtotal = periodSubtotal;
       t.discount = { type: draft.discount.type, value: draft.discount.value||0, amount: discountAmount };
       t.jaminan = { type: draft.jaminan.type, note: draft.jaminan.note||"" };
-      t.payment = { status: draft.payment.status, paidAmount: draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? (draft.payment.paidAmount||0) : 0), method: draft.paymentMethod };
-      t.total = grandTotal;
+      t.total = grandTotal; // set total DULU sebelum rekonsiliasi, supaya status lunas/sebagian dihitung dari total yang benar
+      t.payment.method = draft.paymentMethod;
+      const editTargetPaid = draft.payment.status==="lunas" ? grandTotal : (draft.payment.status==="sebagian" ? Math.min(draft.payment.paidAmount||0, grandTotal) : 0);
+      reconcilePaymentHistoryTo(t, editTargetPaid, draft.paymentMethod, "Penyesuaian saat edit transaksi");
       t.updatedAt = new Date().toISOString();
       save("basecamp_transactions", transactions);
     }
@@ -2305,6 +2330,10 @@ saveBtn.addEventListener("click", async ()=>{
       fromBookingId: b ? b.id : null,
       createdAt: new Date().toISOString()
     };
+    // Hitung ulang status/paidAmount dari paymentHistory (sumber kebenaran tunggal), bukan dari draft
+    // mentah — jaga-jaga kalau nominal DP+pelunasan ternyata pas/lebih dari total tapi status yang
+    // dipilih di form belum diubah ke "Lunas".
+    recomputePaymentFromHistory(txn);
     await addNewTransactionSafely(txn);
 
     if(b){
@@ -2381,6 +2410,9 @@ saveBtn.addEventListener("click", async ()=>{
     jaminanReturned: false,
     createdAt: new Date().toISOString()
   };
+  // Sama seperti aktivasi booking: status/paidAmount final selalu ditentukan dari paymentHistory,
+  // supaya "Sebagian" yang nominalnya kebetulan >= total otomatis jadi "Lunas", bukan nyangkut salah status.
+  recomputePaymentFromHistory(txn);
   await addNewTransactionSafely(txn);
   finishAndGoTo("transaksi", null);
 });
@@ -2681,23 +2713,19 @@ function renderTransaksiDetail(){
     sel.addEventListener("change", ()=>{
       const tx = transactions.find(x=>x.id===sel.dataset.id);
       const newStatus = sel.value;
+      // Semua perubahan status di sini SELALU disinkronkan lewat riwayat pembayaran (paymentHistory),
+      // bukan cuma mengubah tx.payment.status/paidAmount secara langsung. Ini memperbaiki bug lama:
+      // status berubah tapi riwayat pembayaran (dan Kas Harian/Laporan yang menghitung dari riwayat)
+      // jadi tidak sinkron dengan status yang ditampilkan.
       if(newStatus==="hutang"){
-        tx.payment.status = "hutang";
-        tx.payment.paidAmount = 0;
+        reconcilePaymentHistoryTo(tx, 0, tx.payment.method, "Diubah manual ke Belum Bayar");
       } else if(newStatus==="lunas"){
-        // Kalau dipilih "Lunas" langsung dari dropdown ini (bukan lewat "+ Bayar"), catat selisih yang
-        // belum ada di riwayat sebagai 1 entri pembayaran, supaya Kas Harian & Laporan tetap akurat
-        // dan tidak ada lagi kasus "status Lunas tapi riwayat pembayaran kosong".
-        if(!tx.paymentHistory) tx.paymentHistory = [];
-        const alreadyLogged = tx.paymentHistory.reduce((s,h)=>s+h.amount, 0);
-        const unlogged = tx.total - alreadyLogged;
-        if(unlogged>0){
-          tx.paymentHistory.push({ id: uid(), amount: unlogged, method: tx.payment.method||"cash", note: "Ditandai Lunas manual", at: new Date().toISOString() });
-        }
-        tx.payment.paidAmount = tx.total;
-        tx.payment.status = "lunas";
+        reconcilePaymentHistoryTo(tx, tx.total, tx.payment.method, "Ditandai Lunas manual");
       } else {
-        tx.payment.status = newStatus;
+        // "Sebagian" dipilih tanpa nominal baru: pertahankan nominal yang sudah tercatat di riwayat.
+        // Kalau sebelumnya 0/hutang, admin diarahkan pakai "+ Bayar" untuk mencatat nominal sebenarnya.
+        recomputePaymentFromHistory(tx);
+        tx.payment.status = "sebagian";
       }
       save("basecamp_transactions", transactions);
       renderTransaksiDetail();
@@ -2861,6 +2889,21 @@ function recomputePaymentFromHistory(t){
   t.payment.status = paid<=0 ? "hutang" : (paid>=t.total ? "lunas" : "sebagian");
 }
 
+// Menyamakan total riwayat pembayaran (paymentHistory) dengan sebuah target nominal, dengan menambah
+// SATU entri koreksi (bisa positif atau negatif) berisi selisihnya, lalu menghitung ulang status/paidAmount
+// dari riwayat. Dipakai di mana pun status/nominal pembayaran diubah secara manual (dropdown status,
+// edit transaksi, dsb) supaya paymentHistory (dan Kas Harian/Laporan yang berpatokan padanya) selalu
+// jadi sumber kebenaran tunggal — tidak ada lagi status yang berubah tanpa riwayat ikut berubah.
+function reconcilePaymentHistoryTo(t, targetPaidAmount, method, note){
+  if(!t.paymentHistory) t.paymentHistory = [];
+  const alreadyLogged = t.paymentHistory.reduce((s,h)=>s+h.amount, 0);
+  const diff = Math.round((targetPaidAmount||0) - alreadyLogged);
+  if(diff !== 0){
+    t.paymentHistory.push({ id: uid(), amount: diff, method: method||t.payment.method||"cash", note: note||"Koreksi manual", at: new Date().toISOString() });
+  }
+  recomputePaymentFromHistory(t);
+}
+
 const bayarOverlay = document.getElementById("bayarOverlay");
 const bayarDrawer = document.getElementById("bayarDrawer");
 const bayarInfo = document.getElementById("bayarInfo");
@@ -2868,9 +2911,72 @@ const bayarAmountInput = document.getElementById("bayarAmount");
 const bayarNoteInput = document.getElementById("bayarNote");
 const bayarError = document.getElementById("bayarError");
 const bayarDateInput = document.getElementById("bayarDateInput");
+const bayarSplitRowsEl = document.getElementById("bayarSplitRows");
+const bayarSplitSummaryEl = document.getElementById("bayarSplitSummary");
+const bayarSingleWrap = document.getElementById("bayarSingleWrap");
+const bayarSplitWrap = document.getElementById("bayarSplitWrap");
 let bayarTargetTxnId = null;
 let bayarMethod = "cash";
 let bayarDate = todayISO();
+let bayarSplitMode = "single"; // 'single' | 'multi'
+let bayarSplitRows = []; // [{id, amount, method}] — dipakai kalau bayarSplitMode==="multi"
+
+// ---- Split beberapa metode dalam SATU pencatatan pembayaran (mis. 60rb cash + 40rb QRIS) ----
+function newSplitRow(method){ return { id: uid(), amount: "", method: method||"cash" }; }
+function renderBayarSplitRows(){
+  bayarSplitRowsEl.innerHTML = bayarSplitRows.map((r,idx)=>`
+    <div class="field-row" data-splitrow="${r.id}" style="align-items:center; margin-bottom:8px;">
+      <input class="field" type="number" min="0" style="margin-bottom:0" data-splitamt="${r.id}" placeholder="Nominal" value="${r.amount}">
+      <select class="field" style="margin-bottom:0; flex:0 0 110px;" data-splitmethod="${r.id}">
+        <option value="cash" ${r.method==='cash'?'selected':''}>Cash</option>
+        <option value="qris" ${r.method==='qris'?'selected':''}>QRIS</option>
+        <option value="transfer" ${r.method==='transfer'?'selected':''}>Transfer</option>
+      </select>
+      ${bayarSplitRows.length>1 ? `<button type="button" data-removesplit="${r.id}" style="background:none;border:none;color:#C0392B;font-size:14px;cursor:pointer;padding:0 4px;">✕</button>` : ""}
+    </div>
+  `).join("");
+  bayarSplitRowsEl.querySelectorAll("[data-splitamt]").forEach(inp=>{
+    inp.addEventListener("input", e=>{
+      const row = bayarSplitRows.find(r=>r.id===e.target.dataset.splitamt);
+      if(row) row.amount = e.target.value;
+      updateBayarSplitSummary();
+    });
+  });
+  bayarSplitRowsEl.querySelectorAll("[data-splitmethod]").forEach(sel=>{
+    sel.addEventListener("change", e=>{
+      const row = bayarSplitRows.find(r=>r.id===e.target.dataset.splitmethod);
+      if(row) row.method = e.target.value;
+    });
+  });
+  bayarSplitRowsEl.querySelectorAll("[data-removesplit]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      bayarSplitRows = bayarSplitRows.filter(r=>r.id!==btn.dataset.removesplit);
+      renderBayarSplitRows();
+      updateBayarSplitSummary();
+    });
+  });
+  updateBayarSplitSummary();
+}
+function updateBayarSplitSummary(){
+  const total = bayarSplitRows.reduce((s,r)=>s+(parseInt(r.amount)||0), 0);
+  bayarSplitSummaryEl.innerHTML = `Total dari semua metode: <b>${fmt(total)}</b>`;
+}
+document.getElementById("addSplitRowBtn").addEventListener("click", ()=>{
+  const usedMethods = bayarSplitRows.map(r=>r.method);
+  const nextMethod = ["cash","qris","transfer"].find(m=>!usedMethods.includes(m)) || "cash";
+  bayarSplitRows.push(newSplitRow(nextMethod));
+  renderBayarSplitRows();
+});
+function setBayarSplitMode(mode){
+  bayarSplitMode = mode;
+  document.getElementById("bayarModeSingleBtn").classList.toggle("active", mode==="single");
+  document.getElementById("bayarModeMultiBtn").classList.toggle("active", mode==="multi");
+  bayarSingleWrap.style.display = mode==="single" ? "" : "none";
+  bayarSplitWrap.style.display = mode==="multi" ? "" : "none";
+  bayarError.textContent = "";
+}
+document.getElementById("bayarModeSingleBtn").addEventListener("click", ()=>setBayarSplitMode("single"));
+document.getElementById("bayarModeMultiBtn").addEventListener("click", ()=>setBayarSplitMode("multi"));
 
 function openBayarDrawer(txnId){
   const t = transactions.find(x=>x.id===txnId);
@@ -2882,6 +2988,9 @@ function openBayarDrawer(txnId){
   bayarNoteInput.value = "";
   bayarError.textContent = "";
   bayarDateInput.value = bayarDate;
+  bayarSplitRows = [newSplitRow("cash"), newSplitRow("qris")];
+  setBayarSplitMode("single");
+  renderBayarSplitRows();
   bayarDrawer.querySelectorAll("[data-bm]").forEach(b=>b.classList.toggle("active", b.dataset.bm==="cash"));
   bayarDrawer.querySelectorAll("[data-bayardate]").forEach(b=>b.classList.toggle("active", b.dataset.bayardate==="today"));
   const sisa = Math.max(0, t.total - (t.payment.paidAmount||0));
@@ -2910,27 +3019,52 @@ bayarDateInput.addEventListener("change", e=>{
   bayarDrawer.querySelectorAll("[data-bayardate]").forEach(b=>b.classList.remove("active"));
 });
 document.getElementById("saveBayarBtn").addEventListener("click", ()=>{
-  const amount = parseInt(bayarAmountInput.value);
-  if(!amount || amount<=0){
-    bayarError.textContent = "Nominal pembayaran wajib diisi (lebih dari 0).";
-    return;
-  }
   const t = transactions.find(x=>x.id===bayarTargetTxnId);
-  if(t){
-    if(!t.paymentHistory) t.paymentHistory = [];
-    // kalau ada nominal terbayar sebelumnya yang belum tercatat di riwayat (misal dari checkout awal atau diset manual lewat dropdown status), selamatkan dulu jadi 1 entri
-    const alreadyLogged = t.paymentHistory.reduce((s,h)=>s+h.amount, 0);
-    const unlogged = (t.payment.paidAmount||0) - alreadyLogged;
-    if(unlogged>0){
-      t.paymentHistory.push({ id: uid(), amount: unlogged, method: t.payment.method||"cash", note: "Pembayaran sebelumnya", at: t.createdAt||new Date().toISOString() });
+  if(!t) return;
+
+  // Kumpulkan entri pembayaran yang akan dicatat: 1 baris (mode "1 Metode") atau beberapa
+  // baris sekaligus dengan metode berbeda-beda (mode "Split Beberapa Metode").
+  let entriesToAdd = [];
+  if(bayarSplitMode==="single"){
+    const amount = parseInt(bayarAmountInput.value);
+    if(!amount || amount<=0){
+      bayarError.textContent = "Nominal pembayaran wajib diisi (lebih dari 0).";
+      return;
     }
-    // Tanggal diterima dipilih dari drawer (default hari ini), jamnya tetap pakai waktu sekarang saat disimpan
-    const timePart = new Date().toISOString().slice(10); // "THH:MM:SS.sssZ"
-    const paidAt = (bayarDate || todayISO()) + timePart;
-    t.paymentHistory.push({ id: uid(), amount, method: bayarMethod, note: bayarNoteInput.value.trim(), at: paidAt });
-    recomputePaymentFromHistory(t);
-    save("basecamp_transactions", transactions);
+    entriesToAdd = [{ amount, method: bayarMethod }];
+  } else {
+    entriesToAdd = bayarSplitRows
+      .map(r=>({ amount: parseInt(r.amount)||0, method: r.method }))
+      .filter(r=>r.amount>0);
+    if(entriesToAdd.length===0){
+      bayarError.textContent = "Isi nominal untuk minimal satu metode pembayaran.";
+      return;
+    }
+    // Cegah 2 baris dengan metode yang sama supaya tidak membingungkan; gabung otomatis kalau ada.
+    const merged = {};
+    entriesToAdd.forEach(e=>{ merged[e.method] = (merged[e.method]||0) + e.amount; });
+    entriesToAdd = Object.entries(merged).map(([method,amount])=>({ amount, method }));
   }
+
+  if(!t.paymentHistory) t.paymentHistory = [];
+  // kalau ada nominal terbayar sebelumnya yang belum tercatat di riwayat (misal dari checkout awal atau diset manual lewat dropdown status), selamatkan dulu jadi 1 entri
+  const alreadyLogged = t.paymentHistory.reduce((s,h)=>s+h.amount, 0);
+  const unlogged = (t.payment.paidAmount||0) - alreadyLogged;
+  if(unlogged>0){
+    t.paymentHistory.push({ id: uid(), amount: unlogged, method: t.payment.method||"cash", note: "Pembayaran sebelumnya", at: t.createdAt||new Date().toISOString() });
+  }
+  // Tanggal diterima dipilih dari drawer (default hari ini), jamnya tetap pakai waktu sekarang saat disimpan
+  const timePart = new Date().toISOString().slice(10); // "THH:MM:SS.sssZ"
+  const paidAt = (bayarDate || todayISO()) + timePart;
+  const baseNote = bayarNoteInput.value.trim();
+  entriesToAdd.forEach(e=>{
+    const note = entriesToAdd.length>1
+      ? (baseNote ? `${baseNote} (split ${methodLabel(e.method)})` : `Split pembayaran (${methodLabel(e.method)})`)
+      : baseNote;
+    t.paymentHistory.push({ id: uid(), amount: e.amount, method: e.method, note, at: paidAt });
+  });
+  recomputePaymentFromHistory(t);
+  save("basecamp_transactions", transactions);
   closeBayarDrawer();
   renderTransaksi();
 });
