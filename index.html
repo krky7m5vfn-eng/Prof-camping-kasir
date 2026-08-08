@@ -674,6 +674,7 @@
     <div id="bayarSingleWrap">
       <div class="section-label">Nominal Diterima (Rp)</div>
       <input class="field" type="number" min="0" id="bayarAmount" placeholder="Contoh: 50000">
+      <div class="dur-chips" id="bayarQuickAmounts" style="margin-bottom:12px;"></div>
       <div class="section-label">Metode Bayar</div>
       <div class="dur-chips">
         <button class="dur-chip active" data-bm="cash">Cash</button>
@@ -1016,6 +1017,19 @@ const CATALOG = [
 ].map((r,i)=>({id:"p"+i, name:r[0], cat:r[1], price:r[2], unit:"Hari"}));
 
 const fmt = n => "Rp " + n.toLocaleString("id-ID");
+// Pecahan nominal yang umum dipakai untuk tombol "nominal cepat" di berbagai form pembayaran
+// (checkout transaksi, edit transaksi, DP booking, catat pembayaran) — biar admin tidak perlu ketik manual.
+const QUICK_AMOUNT_DENOMS = [20000, 50000, 100000, 150000, 200000, 300000, 500000];
+// Membuat HTML tombol nominal cepat untuk sebuah input tertentu (dikenali lewat data-qafor).
+// fullAmountLabel/fullAmount opsional: kalau diisi, tombol pertama jadi pintasan "bayar penuh" (mis. total sewa).
+function quickAmountChipsHtml(targetInputId, fullAmount, fullLabel){
+  const chips = [];
+  if(fullAmount>0) chips.push(`<button type="button" class="dur-chip" data-qafor="${targetInputId}" data-qaamt="${fullAmount}">${fullLabel||'Bayar Penuh'} (${fmt(fullAmount)})</button>`);
+  QUICK_AMOUNT_DENOMS.forEach(d=>{
+    chips.push(`<button type="button" class="dur-chip" data-qafor="${targetInputId}" data-qaamt="${d}">${fmt(d)}</button>`);
+  });
+  return `<div class="dur-chips" style="margin:-2px 0 12px;">${chips.join("")}</div>`;
+}
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
 // Debounce: tunda eksekusi sampai user berhenti mengetik sejenak, biar pencarian di data besar
 // (ribuan pelanggan) tidak bikin keyboard/ketikan terasa berat di tiap huruf.
@@ -1780,6 +1794,10 @@ function openEditTxn(id){
     if(p) cart[p.id] = i.qty;
   });
   save("basecamp_cart_v2", cart);
+  // Kalau nominal yang sudah tercatat ternyata sudah menyamai/melebihi total (mis. transaksi lama
+  // yang datanya nyangkut di status "Sebagian" padahal sudah lunas), betulkan statusnya begitu form dibuka.
+  const editPayment = {...t.payment};
+  if(t.total>0 && (editPayment.paidAmount||0) >= t.total) editPayment.status = "lunas";
   draft = {
     ...freshDraft(),
     editingId: t.id,
@@ -1790,7 +1808,7 @@ function openEditTxn(id){
     discount: t.discount ? {...t.discount} : { type:"none", value:0 },
     jaminan: t.jaminan ? {...t.jaminan} : { type:"none", note:"" },
     paymentMethod: t.payment.method || "cash",
-    payment: {...t.payment}
+    payment: editPayment
   };
   renderCatalog(); renderCartFab();
   openDrawer();
@@ -2020,6 +2038,7 @@ function renderCheckout(){
     ${isBookingFlow ? `
       <div class="section-label">Uang Muka (DP)</div>
       <input class="field" type="number" min="0" id="dpAmount" placeholder="Jumlah DP yang diterima" value="${draft.dp||''}">
+      ${quickAmountChipsHtml('dpAmount', grandTotal, 'Total Sewa')}
       <div class="date-summary">
         Total estimasi sewa: <b>${fmt(grandTotal)}</b><br>
         Sisa dibayar saat ambil barang: <b>${fmt(Math.max(0, grandTotal - (draft.dp||0)))}</b>
@@ -2031,6 +2050,7 @@ function renderCheckout(){
       <div class="pay-toggle">${payHtml}</div>
       ${draft.payment.status==="sebagian" ? `
         <input class="field" type="number" min="0" max="${grandTotal}" id="paidAmount" placeholder="Jumlah sudah dibayar" value="${draft.payment.paidAmount||''}">
+        ${quickAmountChipsHtml('paidAmount', grandTotal, 'Lunas')}
         <div class="date-summary">Sisa tagihan: <b>${fmt(Math.max(0, grandTotal - (draft.payment.paidAmount||0)))}</b></div>
       ` : ""}
       <div class="section-label">Metode Pembayaran</div>
@@ -2169,6 +2189,25 @@ function renderCheckout(){
   });
   const dpAmount = document.getElementById("dpAmount");
   if(dpAmount) dpAmount.addEventListener("input", e=>{ draft.dp = parseInt(e.target.value)||0; renderCheckout(); });
+
+  // Tombol nominal cepat (dipakai di kolom "Jumlah sudah dibayar" & "Uang Muka (DP)")
+  checkoutBody.querySelectorAll("[data-qafor]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const amt = parseInt(btn.dataset.qaamt)||0;
+      const target = btn.dataset.qafor;
+      if(target==="paidAmount"){
+        if(amt >= grandTotal && grandTotal>0){
+          draft.payment.status = "lunas";
+          draft.payment.paidAmount = 0;
+        } else {
+          draft.payment.paidAmount = amt;
+        }
+      } else if(target==="dpAmount"){
+        draft.dp = amt;
+      }
+      renderCheckout();
+    });
+  });
 
   checkoutBody.querySelectorAll("[data-method]").forEach(btn=>{
     btn.addEventListener("click", ()=>{ draft.paymentMethod = btn.dataset.method; renderCheckout(); });
@@ -2920,19 +2959,42 @@ let bayarMethod = "cash";
 let bayarDate = todayISO();
 let bayarSplitMode = "single"; // 'single' | 'multi'
 let bayarSplitRows = []; // [{id, amount, method}] — dipakai kalau bayarSplitMode==="multi"
+let bayarSisaTagihan = 0; // sisa tagihan transaksi yang sedang dibuka di drawer ini, dipakai untuk tombol nominal cepat
+
+// ---- Tombol nominal cepat, biar admin tidak perlu ketik manual tiap kali ----
+// "Uang Pas" = seluruh sisa tagihan. Sisanya pecahan uang yang umum dipakai pelanggan.
+function renderBayarQuickAmounts(){
+  const box = document.getElementById("bayarQuickAmounts");
+  if(!box) return;
+  const chips = [];
+  if(bayarSisaTagihan>0) chips.push(`<button type="button" class="dur-chip" data-quickamt="${bayarSisaTagihan}">Uang Pas (${fmt(bayarSisaTagihan)})</button>`);
+  QUICK_AMOUNT_DENOMS.forEach(d=>{
+    chips.push(`<button type="button" class="dur-chip" data-quickamt="${d}">${fmt(d)}</button>`);
+  });
+  box.innerHTML = chips.join("");
+  box.querySelectorAll("[data-quickamt]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      bayarAmountInput.value = btn.dataset.quickamt;
+      box.querySelectorAll("[data-quickamt]").forEach(b=>b.classList.toggle("active", b===btn));
+    });
+  });
+}
 
 // ---- Split beberapa metode dalam SATU pencatatan pembayaran (mis. 60rb cash + 40rb QRIS) ----
 function newSplitRow(method){ return { id: uid(), amount: "", method: method||"cash" }; }
 function renderBayarSplitRows(){
   bayarSplitRowsEl.innerHTML = bayarSplitRows.map((r,idx)=>`
-    <div class="field-row" data-splitrow="${r.id}" style="align-items:center; margin-bottom:8px;">
-      <input class="field" type="number" min="0" style="margin-bottom:0" data-splitamt="${r.id}" placeholder="Nominal" value="${r.amount}">
-      <select class="field" style="margin-bottom:0; flex:0 0 110px;" data-splitmethod="${r.id}">
-        <option value="cash" ${r.method==='cash'?'selected':''}>Cash</option>
-        <option value="qris" ${r.method==='qris'?'selected':''}>QRIS</option>
-        <option value="transfer" ${r.method==='transfer'?'selected':''}>Transfer</option>
-      </select>
-      ${bayarSplitRows.length>1 ? `<button type="button" data-removesplit="${r.id}" style="background:none;border:none;color:#C0392B;font-size:14px;cursor:pointer;padding:0 4px;">✕</button>` : ""}
+    <div data-splitrowwrap="${r.id}" style="margin-bottom:10px;">
+      <div class="field-row" data-splitrow="${r.id}" style="align-items:center;">
+        <input class="field" type="number" min="0" style="margin-bottom:0" data-splitamt="${r.id}" placeholder="Nominal" value="${r.amount}">
+        <select class="field" style="margin-bottom:0; flex:0 0 110px;" data-splitmethod="${r.id}">
+          <option value="cash" ${r.method==='cash'?'selected':''}>Cash</option>
+          <option value="qris" ${r.method==='qris'?'selected':''}>QRIS</option>
+          <option value="transfer" ${r.method==='transfer'?'selected':''}>Transfer</option>
+        </select>
+        ${bayarSplitRows.length>1 ? `<button type="button" data-removesplit="${r.id}" style="background:none;border:none;color:#C0392B;font-size:14px;cursor:pointer;padding:0 4px;">✕</button>` : ""}
+      </div>
+      <button type="button" data-fillrest="${r.id}" style="margin-top:4px; background:none; border:1px dashed var(--line); color:var(--canvas-dim); border-radius:7px; padding:4px 9px; font-family:'IBM Plex Mono'; font-size:10.5px; cursor:pointer;">Isi sisa yang belum dialokasikan</button>
     </div>
   `).join("");
   bayarSplitRowsEl.querySelectorAll("[data-splitamt]").forEach(inp=>{
@@ -2955,11 +3017,22 @@ function renderBayarSplitRows(){
       updateBayarSplitSummary();
     });
   });
+  bayarSplitRowsEl.querySelectorAll("[data-fillrest]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const rowId = btn.dataset.fillrest;
+      const row = bayarSplitRows.find(r=>r.id===rowId);
+      if(!row) return;
+      const othersTotal = bayarSplitRows.filter(r=>r.id!==rowId).reduce((s,r)=>s+(parseInt(r.amount)||0), 0);
+      const rest = Math.max(0, bayarSisaTagihan - othersTotal);
+      row.amount = rest;
+      renderBayarSplitRows();
+    });
+  });
   updateBayarSplitSummary();
 }
 function updateBayarSplitSummary(){
   const total = bayarSplitRows.reduce((s,r)=>s+(parseInt(r.amount)||0), 0);
-  bayarSplitSummaryEl.innerHTML = `Total dari semua metode: <b>${fmt(total)}</b>`;
+  bayarSplitSummaryEl.innerHTML = `Total dari semua metode: <b>${fmt(total)}</b>${bayarSisaTagihan>0 ? ` <span style="color:var(--canvas-dim)">(sisa tagihan ${fmt(bayarSisaTagihan)})</span>` : ""}`;
 }
 document.getElementById("addSplitRowBtn").addEventListener("click", ()=>{
   const usedMethods = bayarSplitRows.map(r=>r.method);
@@ -2989,11 +3062,13 @@ function openBayarDrawer(txnId){
   bayarError.textContent = "";
   bayarDateInput.value = bayarDate;
   bayarSplitRows = [newSplitRow("cash"), newSplitRow("qris")];
+  const sisa = Math.max(0, t.total - (t.payment.paidAmount||0));
+  bayarSisaTagihan = sisa;
   setBayarSplitMode("single");
+  renderBayarQuickAmounts();
   renderBayarSplitRows();
   bayarDrawer.querySelectorAll("[data-bm]").forEach(b=>b.classList.toggle("active", b.dataset.bm==="cash"));
   bayarDrawer.querySelectorAll("[data-bayardate]").forEach(b=>b.classList.toggle("active", b.dataset.bayardate==="today"));
-  const sisa = Math.max(0, t.total - (t.payment.paidAmount||0));
   bayarInfo.innerHTML = `Total sewa: <b>${fmt(t.total)}</b><br>Sudah dibayar: <b>${fmt(t.payment.paidAmount||0)}</b><br>Sisa tagihan: <b>${fmt(sisa)}</b>`;
   bayarOverlay.classList.add("open"); bayarDrawer.classList.add("open");
   setTimeout(()=>bayarAmountInput.focus(), 200);
@@ -3249,6 +3324,18 @@ function jaminanLabel(j){
   return j.note ? `${base} (${j.note})` : base;
 }
 function methodLabel(m){ return m==="qris" ? "QRIS" : m==="transfer" ? "Transfer" : "Cash"; }
+// Ringkasan metode bayar untuk ditampilkan di struk/laporan — kalau transaksi dibayar pakai
+// SPLIT beberapa metode (lihat paymentHistory), tampilkan rinciannya semua, bukan cuma 1 metode
+// (dulu ini bug: struk selalu nampilin t.payment.method meski dibayar campur cash+QRIS).
+function paymentMethodSummary(t){
+  const hist = (t.paymentHistory||[]).filter(h=>h.amount>0);
+  if(hist.length===0) return methodLabel(t.payment.method);
+  const totals = {};
+  hist.forEach(h=>{ totals[h.method] = (totals[h.method]||0) + h.amount; });
+  const methods = Object.keys(totals);
+  if(methods.length<=1) return methodLabel(methods[0] || t.payment.method);
+  return methods.map(m=>`${methodLabel(m)} ${fmt(totals[m])}`).join(" + ");
+}
 
 // Jam buka toko: Senin-Kamis 10:00-22:00, Jumat-Minggu 08:00-22:00
 function storeHoursForDate(iso){
@@ -3290,7 +3377,7 @@ function buildReceiptMessage(t){
   }
   msg += `💰 *TOTAL: ${fmt(t.total)}*\n`;
   msg += `Status Bayar: *${payLabel}*\n`;
-  msg += `Metode Bayar: *${methodLabel(t.payment.method)}*\n`;
+  msg += `Metode Bayar: *${paymentMethodSummary(t)}*\n`;
   if(t.payment.status==="sebagian") msg += `Sudah dibayar: ${fmt(t.payment.paidAmount||0)} · Sisa: *${fmt(sisa)}*\n`;
   msg += `${div}\n🙏 Terima kasih telah menyewa di Prof Camping!`;
   return msg;
@@ -3363,7 +3450,7 @@ function renderReceiptCapture(){
       ${t.discount && t.discount.amount>0 ? `<div class="rc-line"><span>Diskon</span><span>−${fmt(t.discount.amount)}</span></div>` : ""}
       ${dendaLines}
       <div class="rc-grand"><span>Total</span><span>${fmt(t.total)}</span></div>
-      <div class="rc-line" style="margin-top:6px;"><span>Metode Bayar</span><span>${methodLabel(t.payment.method)}</span></div>
+      <div class="rc-line" style="margin-top:6px;"><span>Metode Bayar</span><span>${paymentMethodSummary(t)}</span></div>
       ${t.payment.status==="sebagian" ? `<div class="rc-line"><span>Sudah Dibayar</span><span>${fmt(t.payment.paidAmount||0)}</span></div><div class="rc-line"><span>Sisa Tagihan</span><span>${fmt(sisa)}</span></div>` : ""}
     </div>
     <div class="rc-footer">Terima kasih telah menyewa di Prof Camping!<br><span class="rc-footer-bold">BATAS PENGEMBALIAN ALAT SAMPAI HARI ${DAY_NAMES[new Date(t.endDate+"T00:00:00").getDay()].toUpperCase()} PUKUL 20:00. SETIAP KETERLAMBATAN AKAN DIKENAKAN BIAYA SEWA TAMBAHAN BERDASARKAN KETENTUAN YANG BERLAKU.</span></div>
@@ -4628,9 +4715,20 @@ function renderDashboard(){
   const paySegments = Object.keys(payMap).map(k=>({ label: payLabels[k]||k, value: payMap[k], color: payColors[k]||"var(--amber-bright)" }));
 
   const methodColors = ["var(--amber-bright)","var(--chart-blue)","var(--chart-teal)","var(--chart-rose)","var(--brick)"];
+  // Dihitung dari NOMINAL YANG BENAR-BENAR DITERIMA per metode (paymentHistory), bukan seluruh nilai
+  // transaksi dianggap 1 metode — supaya split bill (mis. cash+QRIS) tampil pecah di grafik ini, bukan
+  // numpuk semua ke 1 metode saja.
   const methodMap = {};
-  periodList.forEach(t=>{ const m=(t.payment.method||"lainnya"); methodMap[m]=(methodMap[m]||0)+t.total; });
-  const methodSegments = Object.keys(methodMap).map((k,i)=>({ label: k.charAt(0).toUpperCase()+k.slice(1), value: methodMap[k], color: methodColors[i%methodColors.length] }));
+  periodList.forEach(t=>{
+    const hist = (t.paymentHistory||[]).filter(h=>h.amount>0);
+    if(hist.length>0){
+      hist.forEach(h=>{ methodMap[h.method] = (methodMap[h.method]||0) + h.amount; });
+    } else if((t.payment.paidAmount||0)>0){
+      const m = t.payment.method||"cash";
+      methodMap[m] = (methodMap[m]||0) + t.payment.paidAmount;
+    }
+  });
+  const methodSegments = Object.keys(methodMap).map((k,i)=>({ label: methodLabel(k), value: methodMap[k], color: methodColors[i%methodColors.length] }));
 
   const end14 = todayISO(), start14 = addDays(end14, -13);
   const trendRows = breakdownByDay(start14, end14, transactions);
