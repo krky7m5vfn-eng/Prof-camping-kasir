@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="id">
+<head><style>
+@font-face {
+  font-family: "Optimistic";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Optimistic Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
+}
+:where(html) {
+  font-family: "Optimistic", system-ui, sans-serif;
+}
+:where(code, pre, kbd, samp) {
+  font-family: "Optimistic Mono", ui-monospace, monospace;
+}
+</style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prof Camping — Basecamp OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        display: ['Syne','sans-serif'],
+        body: ['Inter','sans-serif'],
+        mono: ['JetBrains Mono','monospace']
+      },
+      colors: {
+        base: { DEFAULT: '#0C1210', panel: '#121A17', panel2: '#1A2420', line: '#232F2A', muted: '#7A8D85' },
+        accent: { DEFAULT: '#FF6A2A', bright: '#FF8A4D' },
+        lime: { DEFAULT: '#C6FF6B' }
+      }
+    }
+  }
+}
+</script>
+<style>
+*{ -webkit-tap-highlight-color: transparent }
+::-webkit-scrollbar{ width:6px; height:6px }
+::-webkit-scrollbar-thumb{ background:#2A3A32; border-radius:99px }
+body{ background:#0B1010; color:#E8E6DF; font-family:'Inter',sans-serif; }
+.display{ font-family:'Syne',sans-serif; letter-spacing:-0.02em; text-transform:uppercase }
+.mono{ font-family:'JetBrains Mono',monospace }
+.topo-bg{
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(255,106,42,0.06) 0 2px, transparent 3px),
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 48px 48px, 24px 24px, 24px 24px;
+}
+.card{ background:#121A17; border:1px solid #1E2C27; border-radius:16px }
+.card-hover:hover{ border-color:#2A3E35; background:#151E1B }
+.btn-primary{ background:#FF6A2A; color:#0B1010; font-family:'Syne'; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; }
+.btn-ghost{ background:#1A2420; border:1px solid #232F2A; color:#E8E6DF }
+.chip{ border:1px solid #232F2A; border-radius:999px; padding:6px 14px; font-family:'JetBrains Mono'; font-size:11px; letter-spacing:0.05em; text-transform:uppercase; cursor:pointer }
+.chip.active{ background:#E8E6DF; color:#0B1010; border-color:#E8E6DF; font-weight:600 }
+.dot{ width:8px; height:8px; border-radius:999px; display:inline-block }
+.grid-pos{ display:grid; grid-template-columns: 1.2fr 0.8fr; gap:16px }
+@media(max-width:1024px){ .grid-pos{ grid-template-columns:1fr } }
+#app[hidden]{ display:none !important; }
+#loginScreen[hidden]{ display:none !important; }
+</style>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="min-h-screen antialiased">
+<div id="loginScreen" class="fixed inset-0 z-[100] bg-[#0B1010] flex items-center justify-center px-5">
+  <div class="card w-full max-w-[360px] p-7">
+    <div class="display font-extrabold text-[24px] leading-[0.9] tracking-tight">PROF<br>CAMPING</div>
+    <div class="mono text-[10px] tracking-[0.2em] text-accent mt-2 mb-6">LOGIN ADMIN — BASECAMP OS</div>
+    <input id="loginEmail" type="email" autocomplete="username" placeholder="Email admin"
+      class="w-full bg-[#0C1210] border border-[#232F2A] rounded-xl px-4 py-3 mb-3 text-[14px] placeholder:text-[#4A5A54] focus:outline-none focus:border-accent">
+    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password"
+      class="w-full bg-[#0C1210] border border-[#232F2A] rounded-xl px-4 py-3 mb-4 text-[14px] placeholder:text-[#4A5A54] focus:outline-none focus:border-accent">
+    <button id="loginBtn" class="btn-primary w-full rounded-full py-3 text-[13px]">MASUK</button>
+    <div id="loginError" class="mono text-[11.5px] text-[#FF4D4D] mt-3 min-h-[16px]"></div>
+  </div>
+</div>
+<div id="app" class="flex min-h-screen" hidden>
+  <!-- SIDEBAR -->
+  <aside id="sidebar" class="hidden lg:flex w-[300px] shrink-0 flex-col bg-[#0E1613] border-r border-[#1C2A24] sticky top-0 h-screen">
+    <div class="p-6 border-b border-[#1C2A24]">
+      <div class="flex items-start justify-between">
+        <div>
+          <div class="display font-extrabold text-[22px] leading-[0.9] tracking-tight">PROF<br>CAMPING</div>
+          <div class="mono text-[10px] tracking-[0.2em] text-[#7A8D85] mt-2">BASECAMP OS • KENDARI</div>
+        </div>
+        <div class="w-9 h-9 rounded-full bg-[#1A2420] border border-[#232F2A] grid place-items-center text-[14px]">▲</div>
+      </div>
+      <div class="mt-5 flex gap-2">
+        <div class="flex-1 card px-3 py-2.5">
+          <div class="mono text-[9px] text-[#7A8D85] tracking-widest">SYNC</div>
+          <div id="syncLabel" class="mono text-[11px] font-semibold mt-0.5 text-[#C6FF6B]">● LOCAL + CLOUD</div>
+        </div>
+        <div class="flex-1 card px-3 py-2.5">
+          <div class="mono text-[9px] text-[#7A8D85] tracking-widest">JAM</div>
+          <div id="clock" class="mono text-[11px] font-semibold mt-0.5">--:-- WITA</div>
+        </div>
+      </div>
+    </div>
+    <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+      <button data-nav="dashboard" class="nav-btn w-full text-left px-3.5 py-3 rounded-xl flex items-center gap-3 bg-[#E8E6DF] text-[#0B1010]"><span class="text-[16px]">◫</span><span class="display font-bold text-[13px] tracking-wide">DASHBOARD</span><span class="ml-auto mono text-[10px] bg-black/10 px-1.5 py-0.5 rounded">⌘1</span></button>
+      <button data-nav="pos" class="nav-btn w-full text-left px-3.5 py-3 rounded-xl flex items-center gap-3 hover:bg-[#121A17]"><span class="text-[16px]">⚡</span><span class="display font-bold text-[13px] tracking-wide text-[#8AA39A]">POS KILAT</span><span class="ml-auto mono text-[10px] text-[#4A5A54]">⌘2</span></button>
+      <button data-nav="bookings" class="nav-btn w-full text-left px-3.5 py-3 rounded-xl flex items-center gap-3 hover:bg-[#121A17]"><span>◐</span><span class="display font-bold text-[13px] tracking-wide text-[#8AA39A]">BOOKING & JADWAL</span></button>
+      <button data-nav="transactions" class="nav-btn w-full text-left px-3.5 py-3 rounded-xl flex items-center gap-3 hover:bg-[#121A17]"><span>☰</span><span class="display font-bold text-[13px] tracking-wide text-[#8AA39A]">TRANSAKSI AKTIF</span><span id="activeBadge" class="ml-auto mono text-[10px] bg-[#FF6A2A] text-black px-2 py-0.5 rounded-full">0</span></button>
+      <button data-nav="customers" class="nav-btn w-full text-left px-3.5 py-3 rounded-xl flex items-center gap-3 hover:bg-[#121A17]"><span>◎</span><span class="display font-bold text-[13px] tracking-wide text-[#8AA39A]">PELANGGAN</span></button>
+      <button data-nav="stock" class="nav-btn w-full text-left px-3.5 py-3 rounded-xl flex items-center gap-3 hover:bg-[#121A17]"><span>⬡</span><span class="display font-bold text-[13px] tracking-wide text-[#8AA39A]">HANGAR / STOK</span></button>
+      <button data-nav="reports" class="nav-btn w-full text-left px-3.5 py-3 rounded-xl flex items-center gap-3 hover:bg-[#121A17]"><span>◨</span><span class="display font-bold text-[13px] tracking-wide text-[#8AA39A]">LAPORAN & KAS</span></button>
+    </nav>
+    <div class="p-4 border-t border-[#1C2A24] space-y-3">
+      <div class="card p-3.5">
+        <div class="mono text-[9px] text-[#7A8D85] tracking-[0.15em]">RADAR HARI INI</div>
+        <div class="flex gap-3 mt-2.5">
+          <div class="flex-1"><div id="radarKembali" class="display text-[20px] font-extrabold leading-none">0</div><div class="mono text-[9px] text-[#7A8D85] mt-1">KEMBALI</div></div>
+          <div class="flex-1"><div id="radarBerangkat" class="display text-[20px] font-extrabold leading-none">0</div><div class="mono text-[9px] text-[#7A8D85] mt-1">BERANGKAT</div></div>
+          <div class="flex-1"><div id="radarTerlambat" class="display text-[20px] font-extrabold leading-none text-[#FF6A2A]">0</div><div class="mono text-[9px] text-[#7A8D85] mt-1">LATE</div></div>
+        </div>
+      </div>
+      <button id="backupBtn" class="w-full btn-ghost rounded-full py-2.5 mono text-[11px]">⬇ BACKUP JSON</button>
+      <button class="logout-btn w-full rounded-full py-2.5 mono text-[11px] border border-[#232F2A] text-[#FF6A2A]">⏻ KELUAR</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="flex-1 min-w-0 flex flex-col">
+    <!-- MOBILE TOP -->
+    <div class="lg:hidden sticky top-0 z-30 bg-[#0E1613]/90 backdrop-blur border-b border-[#1C2A24] px-4 py-3 flex items-center justify-between">
+      <div class="display font-extrabold leading-[0.9]">PROF<br>CAMPING</div>
+      <div class="flex gap-2">
+        <button id="mobileMenuBtn" class="w-9 h-9 rounded-full bg-[#1A2420] grid place-items-center">☰</button>
+      </div>
+    </div>
+    <!-- MOBILE NAV DRAWER -->
+    <div id="mobileNav" class="lg:hidden hidden fixed inset-0 z-40 bg-black/60"><div class="w-[300px] h-full bg-[#0E1613] p-4" id="mobileNavInner"></div></div>
+
+    <!-- TOPBAR -->
+    <header class="sticky top-0 z-20 bg-[#0B1010]/80 backdrop-blur border-b border-[#1C2A24] px-4 lg:px-8 py-4 flex items-center gap-4">
+      <div class="flex-1 min-w-0">
+        <div id="pageTitle" class="display text-[22px] lg:text-[28px] font-extrabold leading-none tracking-tight">DASHBOARD</div>
+        <div id="pageSubtitle" class="mono text-[11px] text-[#7A8D85] mt-1.5 tracking-wide">PROF CAMPING • KENDARI • <span id="todayLabel"></span></div>
+      </div>
+      <div class="hidden md:flex items-center gap-2">
+        <div class="relative">
+          <input id="globalSearch" placeholder="Cari cepat (⌘K) — pelanggan, barang, transaksi" class="w-[320px] bg-[#121A17] border border-[#1E2C27] rounded-full px-4 py-2.5 mono text-[12px] placeholder:text-[#4A5A54] focus:outline-none focus:border-[#2A3E35]">
+        </div>
+        <button id="newTransactionBtn" class="btn-primary rounded-full px-5 py-2.5 text-[12px]">+ TRANSAKSI BARU</button>
+      </div>
+    </header>
+
+    <main class="flex-1 p-4 lg:p-6 topo-bg">
+      <!-- DASHBOARD VIEW -->
+      <section id="view-dashboard" class="view space-y-5">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div class="card p-4 lg:p-5"><div class="mono text-[10px] text-[#7A8D85] tracking-widest">OMZET HARI INI</div><div id="kpiOmzet" class="display text-[22px] font-extrabold mt-2">Rp 0</div><div class="mono text-[10px] text-[#7A8D85] mt-1"><span id="kpiOmzetCount">0</span> transaksi</div></div>
+          <div class="card p-4 lg:p-5"><div class="mono text-[10px] text-[#7A8D85] tracking-widest">PIUTANG AKTIF</div><div id="kpiPiutang" class="display text-[22px] font-extrabold mt-2">Rp 0</div><div class="mono text-[10px] text-[#FF6A2A] mt-1" id="kpiPiutangCount">0 pelanggan</div></div>
+          <div class="card p-4 lg:p-5 border-[#FF6A2A]/20"><div class="mono text-[10px] text-[#7A8D85] tracking-widest">SEWA AKTIF</div><div id="kpiAktif" class="display text-[22px] font-extrabold mt-2">0</div><div class="mono text-[10px] text-[#7A8D85] mt-1"><span id="kpiAktifItems">0</span> unit di luar</div></div>
+          <div class="card p-4 lg:p-5 bg-[#E8E6DF] text-[#0B1010] border-[#E8E6DF]"><div class="mono text-[10px] text-black/50 tracking-widest">BOOKING BESOK</div><div id="kpiBooking" class="display text-[22px] font-extrabold mt-2">0</div><div class="mono text-[10px] text-black/60 mt-1">siap berangkat</div></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="lg:col-span-2 card p-5">
+            <div class="flex items-center justify-between"><div class="display font-bold text-[13px] tracking-wide">JADWAL HARI INI — <span id="scheduleDate"></span></div><div class="mono text-[10px] text-[#7A8D85]">WITA • KENDARI</div></div>
+            <div id="scheduleList" class="mt-4 space-y-2 max-h-[360px] overflow-auto pr-1"></div>
+          </div>
+          <div class="card p-5">
+            <div class="display font-bold text-[13px] tracking-wide">AVAILABILITY RADAR</div>
+            <div class="mono text-[10px] text-[#7A8D85] mt-1">Unit kritis & hampir habis</div>
+            <div id="radarList" class="mt-4 space-y-2.5"></div>
+            <div class="mt-5 p-3 rounded-xl bg-[#1A2420] border border-[#232F2A]">
+              <div class="mono text-[10px] text-[#7A8D85]">TIP OPERASIONAL</div>
+              <div class="text-[12px] leading-[1.5] mt-1.5 text-[#C5D1CC]">Tenda dengan stok total 0 dianggap unlimited. Isi stok di Hangar biar radar akurat. Sistem hitung sewa aktif otomatis.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="card p-5 lg:col-span-2">
+            <div class="flex items-center justify-between"><div class="display font-bold text-[13px]">TREN 14 HARI</div><div class="mono text-[10px] text-[#7A8D85]">Pemasukan diterima (payment history)</div></div>
+            <div id="trendBars" class="mt-5 space-y-2"></div>
+          </div>
+          <div class="card p-5">
+            <div class="display font-bold text-[13px]">TOP GEAR MINGGU INI</div>
+            <div id="topGear" class="mt-4 space-y-2.5"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- POS VIEW -->
+      <section id="view-pos" class="view hidden">
+        <div class="grid-pos items-start">
+          <div class="space-y-4">
+            <div class="card p-4">
+              <div class="flex gap-2">
+                <div class="flex-1 relative"><input id="posSearch" placeholder="Cari gear — tenda, kompor, matras..." class="w-full bg-[#0C1210] border border-[#1E2C27] rounded-full px-4 py-3 mono text-[13px] focus:outline-none focus:border-[#2A3E35]"><span class="absolute right-3 top-3 mono text-[10px] text-[#4A5A54]">/</span></div>
+                <button id="posFilterBtn" class="btn-ghost rounded-full px-4 mono text-[11px]">FILTER</button>
+              </div>
+              <div id="posCats" class="flex gap-2 overflow-x-auto mt-3 pb-1"></div>
+            </div>
+            <div id="posGrid" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3"></div>
+          </div>
+          <div class="lg:sticky lg:top-[88px] space-y-3">
+            <div class="card p-4">
+              <div class="display font-bold text-[13px] flex items-center justify-between">KERANJANG <span id="cartCount" class="mono text-[10px] bg-[#FF6A2A] text-black px-2 py-0.5 rounded-full">0</span></div>
+              <div id="cartList" class="mt-3 space-y-2 max-h-[300px] overflow-auto"></div>
+              <div id="emptyCart" class="mt-6 text-center py-8 border border-dashed border-[#232F2A] rounded-xl"><div class="mono text-[11px] text-[#4A5A54]">Keranjang kosong — klik gear untuk tambah</div></div>
+            </div>
+            <div class="card p-4 space-y-3">
+              <div class="display font-bold text-[12px]">PELANGGAN & JADWAL</div>
+              <div id="posCustomerBox"></div>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="space-y-1"><span class="mono text-[10px] text-[#7A8D85]">MULAI SEWA</span><input id="posStart" type="date" class="w-full bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2.5 mono text-[12px]"></label>
+                <label class="space-y-1"><span class="mono text-[10px] text-[#7A8D85]">DURASI</span><div class="flex items-center gap-1"><button class="dur-btn w-8 h-9 bg-[#1A2420] border border-[#232F2A] rounded-lg" data-d="-1">−</button><input id="posDur" type="number" min="1" value="1" class="flex-1 bg-[#0C1210] border border-[#1E2C27] rounded-lg px-2 py-2 mono text-[12px] text-center"><button class="dur-btn w-8 h-9 bg-[#1A2420] border border-[#232F2A] rounded-lg" data-d="1">+</button></div></label>
+              </div>
+              <div class="flex items-center justify-between bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2.5"><span class="mono text-[11px] text-[#7A8D85]">KEMBALI</span><span id="posEnd" class="mono text-[12px] font-semibold"></span></div>
+              <div class="grid grid-cols-3 gap-2">
+                <button class="dur-quick chip text-center" data-q="1">1 HARI</button><button class="dur-quick chip text-center" data-q="2">2 HARI</button><button class="dur-quick chip text-center" data-q="3">3 HARI</button>
+              </div>
+              <div class="pt-2 border-t border-[#1C2A24] space-y-2">
+                <div class="flex items-center justify-between mono text-[11px]"><span class="text-[#7A8D85]">SUBTOTAL (harian × durasi)</span><span id="posSubtotal" class="font-semibold">Rp 0</span></div>
+                <div class="flex gap-2"><select id="posDiscType" class="bg-[#0C1210] border border-[#1E2C27] rounded-lg px-2 py-2 mono text-[11px]"><option value="none">Tanpa Diskon</option><option value="nominal">Nominal</option><option value="persen">Persen</option></select><input id="posDiscVal" type="number" placeholder="0" class="flex-1 bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2 mono text-[11px]"></div>
+                <div class="flex items-center justify-between mono text-[12px] font-bold"><span>TOTAL</span><span id="posTotal" class="display text-[18px]">Rp 0</span></div>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="space-y-1"><span class="mono text-[10px] text-[#7A8D85]">JAMINAN</span><select id="posJaminan" class="w-full bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2.5 mono text-[11px]"><option value="none">Tanpa Jaminan</option><option value="ktp">KTP</option><option value="sim">SIM</option><option value="motor">Motor</option><option value="lain">Lainnya</option></select></label>
+                <label class="space-y-1"><span class="mono text-[10px] text-[#7A8D85]">BAYAR</span><select id="posMethod" class="w-full bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2.5 mono text-[11px]"><option value="cash">Cash</option><option value="qris">QRIS</option><option value="transfer">Transfer</option></select></label>
+              </div>
+              <label class="space-y-1"><span class="mono text-[10px] text-[#7A8D85]">DIBAYAR SEKARANG</span><input id="posPaid" type="number" placeholder="0" class="w-full bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-3 mono text-[13px]"></label>
+              <div id="posQuickAmounts" class="flex gap-1.5 flex-wrap"></div>
+              <div class="grid grid-cols-2 gap-2 pt-1">
+                <button id="posBookingBtn" class="btn-ghost rounded-full py-3 mono text-[11px] font-semibold tracking-wide">SIMPAN BOOKING (DP)</button>
+                <button id="posCheckoutBtn" class="btn-primary rounded-full py-3 mono text-[11px]">SEWA LANGSUNG →</button>
+              </div>
+              <div class="mono text-[10px] text-[#4A5A54] text-center">Database sama — kompatibel dengan aplikasi lama</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BOOKINGS -->
+      <section id="view-bookings" class="view hidden space-y-4">
+        <div class="flex flex-wrap gap-2 items-center"><div id="bookingChips" class="flex gap-2"></div><input id="bookingSearch" placeholder="Cari booking..." class="ml-auto bg-[#121A17] border border-[#1E2C27] rounded-full px-4 py-2 mono text-[12px] w-[260px]"></div>
+        <div id="bookingList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+      </section>
+
+      <!-- TRANSACTIONS -->
+      <section id="view-transactions" class="view hidden space-y-4">
+        <div class="card p-3 flex flex-wrap gap-2 items-center">
+          <div id="txnStatusChips" class="flex gap-2 overflow-x-auto"></div>
+          <select id="txnMethodFilter" class="bg-[#0C1210] border border-[#1E2C27] rounded-full px-3 py-2 mono text-[11px]">
+            <option value="semua">Semua Metode</option>
+            <option value="cash">Cash</option>
+            <option value="qris">QRIS</option>
+            <option value="transfer">Transfer</option>
+          </select>
+          <div class="flex gap-1.5 items-center">
+            <button id="txnDateYesterday" class="chip">Kemarin</button>
+            <input id="txnDateStart" type="date" class="bg-[#0C1210] border border-[#1E2C27] rounded-lg px-2 py-1.5 mono text-[10px]">
+            <span class="text-[#4A5A54] text-[10px]">s.d.</span>
+            <input id="txnDateEnd" type="date" class="bg-[#0C1210] border border-[#1E2C27] rounded-lg px-2 py-1.5 mono text-[10px]">
+            <button id="txnDateClear" class="mono text-[10px] text-[#7A8D85] underline">reset</button>
+          </div>
+          <input id="txnSearch" placeholder="Cari nama / HP / barang" class="ml-auto bg-[#0C1210] border border-[#1E2C27] rounded-full px-4 py-2 mono text-[12px] w-[260px]">
+        </div>
+        <div id="txnList" class="space-y-2"></div>
+      </section>
+
+      <!-- CUSTOMERS -->
+      <section id="view-customers" class="view hidden space-y-4">
+        <div class="card p-4 flex gap-3 items-center">
+          <input id="custSearch" placeholder="Cari pelanggan..." class="flex-1 bg-[#0C1210] border border-[#1E2C27] rounded-full px-4 py-2.5 mono text-[13px]">
+          <button id="addCustBtn" class="btn-ghost rounded-full px-4 py-2.5 mono text-[11px]">+ PELANGGAN</button>
+        </div>
+        <div id="custList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+      </section>
+
+      <!-- STOCK -->
+      <section id="view-stock" class="view hidden space-y-4">
+        <div class="card p-5">
+          <div class="flex items-center justify-between"><div class="display font-bold">HANGAR — MANAJEMEN STOK</div><div class="mono text-[10px] text-[#7A8D85]">Total, Bersih, Keluar, Perlu Cuci</div></div>
+          <div id="stockTable" class="mt-4"></div>
+        </div>
+      </section>
+
+      <!-- REPORTS -->
+      <section id="view-reports" class="view hidden space-y-4">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="card p-5 lg:col-span-2"><div class="display font-bold text-[13px]">LAPORAN KEUANGAN</div><div class="flex gap-2 mt-3 flex-wrap items-center"><button class="report-range chip active" data-r="today">Hari Ini</button><button class="report-range chip" data-r="yesterday">Kemarin</button><button class="report-range chip" data-r="week">7 Hari</button><button class="report-range chip" data-r="month">Bulan Ini</button><button class="report-range chip" data-r="all">Semua</button><button class="report-range chip" data-r="custom">Tanggal Tertentu</button><span id="reportCustomDates" class="hidden flex gap-1.5 items-center"><input id="reportStart" type="date" class="bg-[#0C1210] border border-[#1E2C27] rounded-lg px-2 py-1.5 mono text-[10px]"><span class="text-[#4A5A54] text-[10px]">s.d.</span><input id="reportEnd" type="date" class="bg-[#0C1210] border border-[#1E2C27] rounded-lg px-2 py-1.5 mono text-[10px]"></span></div><div id="reportContent" class="mt-5 space-y-3"></div></div>
+          <div class="card p-5"><div class="display font-bold text-[13px] flex items-center justify-between">KAS HARIAN <input id="kasDate" type="date" class="bg-[#0C1210] border border-[#1E2C27] rounded-lg px-2 py-1 mono text-[10px]"></div><div id="kasBody" class="mt-4"></div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- DRAWERS -->
+<div id="drawerOverlay" class="fixed inset-0 z-50 hidden bg-black/60 backdrop-blur-sm"></div>
+<div id="drawer" class="fixed right-0 top-0 bottom-0 z-[60] w-full max-w-[520px] bg-[#0E1613] border-l border-[#1C2A24] translate-x-full transition-transform duration-300 overflow-auto">
+  <div class="sticky top-0 bg-[#0E1613]/90 backdrop-blur p-4 border-b border-[#1C2A24] flex items-center justify-between"><div id="drawerTitle" class="display font-bold">DETAIL</div><button id="drawerClose" class="w-9 h-9 rounded-full bg-[#1A2420] grid place-items-center">✕</button></div>
+  <div id="drawerContent" class="p-5"></div>
+</div>
+
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[80] hidden bg-[#E8E6DF] text-black mono text-[12px] px-4 py-2.5 rounded-full shadow-xl"></div>
+
+<script>
+// ========= CORE DATA (SAME KEYS AS OLD APP) =========
+const CATALOG_RAW = [
+["Tenda 7 Orang Tendaki Molucass 6 Pro","Tenda",100000],
+["Tenda 7 Orang Wildshell Mandala 6 Pro","Tenda",100000],
+["Tenda 5 Orang Wildshell Raya 4 Pro Hijau","Tenda",60000],
+["Tenda 5 Orang Wildshell Jayadipa","Tenda",55000],
+["Tenda 5 Orang Rei Eliot V3","Tenda",50000],
+["Tenda 4 Orang Compass Lwy","Tenda",50000],
+["Tenda 2-3 Orang Wildshell Navageo","Tenda",40000],
+["Tenda 4 Orang Dhaulgiri","Tenda",35000],
+["Tenda 2 Orang Dhaulgiri","Tenda",25000],
+["Tenda 2 Orang Arei","Tenda",25000],
+["Flysheet","Tenda",15000],
+["Tiang Flysheet","Tenda",15000],
+["Sleeping Bag","Peralatan Tidur",15000],
+["Sleeping Pad / Matras Angin","Peralatan Tidur",25000],
+["Matras","Peralatan Tidur",5000],
+["Lampu Outdoor","Alat Penerangan",10000],
+["Lampu Tenda","Alat Penerangan",10000],
+["Headlamp","Alat Penerangan",15000],
+["Senter Tangan","Alat Penerangan",15000],
+["Kompor Mini","Peralatan Masak",10000],
+["Nesting B","Peralatan Masak",10000],
+["Kompor Mawar","Peralatan Masak",15000],
+["Pan BBQ","Peralatan Masak",25000],
+["Kompor BBQ","Peralatan Masak",20000],
+["Teko Air","Peralatan Masak",10000],
+["Nesting A","Peralatan Masak",15000],
+["Panci Kecil","Peralatan Masak",5000],
+["Sewa Tabung + Isi Gas","Peralatan Masak",10000],
+["Gelas Eiger Besar","Peralatan Masak",5000],
+["3 Pcs Gelas Mini Dhaulgiri","Peralatan Masak",10000],
+["Alat Bakar Arang","Peralatan Masak",15000],
+["Kursi Dhaulgiri","Peralatan Santai",15000],
+["Kursi Wildshell","Peralatan Santai",20000],
+["Meja Standar","Peralatan Santai",20000],
+["Meja Dhaulgiri","Peralatan Santai",25000],
+["Meja XXL","Peralatan Santai",35000],
+["Meja Wildshell","Peralatan Santai",25000],
+["Paket 4 Kursi + 1 Meja XL","Peralatan Santai",80000],
+["Paket 6 Kursi + 1 Meja XXL","Peralatan Santai",120000],
+["Hammock Single","Peralatan Santai",10000],
+["Tikar Piknik Polos","Peralatan Santai",15000],
+["Powerbank Ugreen + Kabel C to C","Peralatan Lainnya",25000],
+["Powerbank Vivan","Peralatan Lainnya",20000],
+["Tripod","Peralatan Lainnya",10000],
+["Carrier 45-65L","Peralatan Lainnya",35000],
+["Daypack 25-40L","Peralatan Lainnya",25000],
+["Lensa Apexel","Peralatan Lainnya",15000],
+["Sepatu Gunung","Peralatan Lainnya",25000],
+["Tas Hydropack","Peralatan Lainnya",15000],
+["Jaket Gelembung / Jaket Gorpcore","Peralatan Lainnya",25000],
+["Topi Bucket","Peralatan Lainnya",5000],
+["Rompi","Peralatan Lainnya",15000],
+["Treking Pole","Peralatan Lainnya",10000],
+["Sendal Gunung","Peralatan Lainnya",15000],
+["Kacamata Gorpcore","Peralatan Lainnya",5000],
+["Pisau + Sendok + Garpu","Peralatan Masak",5000],
+["Kursi Trailtop","Peralatan Santai",25000],
+["Kursi Lipat Decathlon","Peralatan Santai",25000],
+["Lampu Tumblr","Alat Penerangan",10000],
+["Lampu Sorot","Alat Penerangan",25000],
+["Speaker Bluetooth","Peralatan Lainnya",20000],
+["Tenun Ikat Kepala","Peralatan Lainnya",5000],
+["Daypack 18 Liter Ultralight","Peralatan Lainnya",10000],
+["Sarung Tangan","Peralatan Lainnya",5000],
+].map((r,i)=>({id:'p'+i, name:r[0], cat:r[1], price:r[2], unit:'Hari'}));
+
+const uid = ()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36);
+// BUG YANG DIPERBAIKI: nomor yang diketik diawali "08..." (format lokal) tidak bisa langsung
+// dipakai untuk link wa.me — WhatsApp butuh format internasional "628...". Semua nomor HP
+// sekarang dirapikan lewat fungsi ini sebelum disimpan ATAU sebelum dipakai bikin link WA,
+// jadi tidak perlu lagi diubah manual satu-satu.
+function normalizePhone(raw){
+  let p = String(raw||'').replace(/[^0-9]/g,'');
+  if(!p) return '';
+  if(p.startsWith('0')) p = '62'+p.slice(1);
+  else if(!p.startsWith('62')) p = '62'+p;
+  return p;
+}
+const fmt = n => 'Rp ' + (Number(n)||0).toLocaleString('id-ID');
+const todayISO = ()=>new Date().toISOString().slice(0,10);
+const addDays = (iso,d)=>{ const dt=new Date(iso); dt.setDate(dt.getDate()+d); return dt.toISOString().slice(0,10); };
+const diffDays = (a,b)=> Math.round((new Date(b)-new Date(a))/86400000);
+const load = (k,def)=>{ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):def }catch{ return def } };
+// db diisi belakangan setelah Firebase siap (lihat blok LOGIN ADMIN / SINKRON DATA di bawah).
+// Selama db masih null, save() jalan seperti biasa (lokal saja) tanpa error.
+let db = null;
+const FIRESTORE_SYNCED_KEYS = ['basecamp_customers','basecamp_transactions','basecamp_deleted_transactions','basecamp_bookings','basecamp_custom_products','basecamp_product_overrides','basecamp_product_stock','basecamp_kas_harian'];
+const save = (k,v)=>{
+  try{ localStorage.setItem(k, JSON.stringify(v)) }catch(e){ console.warn(e) }
+  if(db && FIRESTORE_SYNCED_KEYS.includes(k)){
+    db.collection('prof_camping_data').doc(k).set({ value: v, updatedAt: Date.now() })
+      .catch(err=>console.error('Gagal sinkron ke Firebase untuk', k, err));
+  }
+};
+
+let customProducts = load('basecamp_custom_products', []);
+let productOverrides = load('basecamp_product_overrides', {});
+let productStock = load('basecamp_product_stock', {});
+let customers = load('basecamp_customers', []);
+let transactions = load('basecamp_transactions', []);
+let bookings = load('basecamp_bookings', []);
+let deletedTransactions = load('basecamp_deleted_transactions', []);
+// Sekarang per-tanggal (bukan daftar bebas lagi): { "YYYY-MM-DD": { modalAwal, pengeluaran:[],
+// ditutup, uangFisik, selisih, closedAt } } — supaya kas harian beneran jadi rekonsiliasi kasir
+// (buka dengan modal awal → tutup dengan hitung uang fisik → selisih otomatis), bukan cuma catatan bebas.
+let kasHarian = load('basecamp_kas_harian', {});
+let cart = load('basecamp_cart_v2', {});
+
+function allProducts(){
+  const base = CATALOG_RAW.map(p=>{ const ov=productOverrides[p.id]; return ov? {...p, ...ov}: p });
+  return [...base, ...customProducts];
+}
+
+function getRentedMap(){
+  const map={};
+  transactions.forEach(t=>{
+    if(t.status!=='aktif') return;
+    (t.items||[]).forEach(it=>{
+      const key=it.name;
+      map[key]=(map[key]||0)+(it.qty||0);
+    });
+  });
+  return map;
+}
+function getStockInfo(product){
+  const s=productStock[product.id]||{total:0, bersih:0, jenisProses:'none'};
+  const rentedMap=getRentedMap();
+  const rented = rentedMap[product.name]||0;
+  const total = s.total||0;
+  const available = total>0 ? Math.max(0, total - rented) : 999;
+  return { ...s, rented, available, total };
+}
+
+// ========= UI STATE =========
+let activeView='dashboard';
+let posCategory='Semua';
+let posQuery='';
+let posCustomer=null;
+let posCustomerQuery='';
+let posStartDate=todayISO();
+let posDuration=1;
+let posDiscount={type:'none', value:0};
+let posJaminan='none';
+let posMethod='cash';
+let posPaid=0;
+let txnFilter='Semua';
+let txnQuery='';
+let txnMethodFilter='semua';
+let txnDateStart='';
+let txnDateEnd='';
+let bookingFilter='Semua';
+let bookingQuery='';
+let custQuery='';
+let reportRange='today';
+
+// ========= NAV =========
+function switchView(name){
+  activeView=name;
+  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
+  const el=document.getElementById('view-'+name);
+  if(el) el.classList.remove('hidden');
+  document.querySelectorAll('.nav-btn').forEach(b=>{
+    const isActive=b.dataset.nav===name;
+    b.className = isActive ? 'nav-btn w-full text-left px-3.5 py-3 rounded-xl flex items-center gap-3 bg-[#E8E6DF] text-[#0B1010]' : 'nav-btn w-full text-left px-3.5 py-3 rounded-xl flex items-center gap-3 hover:bg-[#121A17] text-[#8AA39A]';
+    if(isActive) b.querySelector('span:last-child')?.classList.add('text-black/50');
+  });
+  document.getElementById('pageTitle').textContent = {dashboard:'DASHBOARD', pos:'POS KILAT', bookings:'BOOKING & JADWAL', transactions:'TRANSAKSI AKTIF', customers:'PELANGGAN', stock:'HANGAR / STOK', reports:'LAPORAN & KAS'}[name]||name.toUpperCase();
+  if(name==='dashboard') renderDashboard();
+  if(name==='pos') renderPOS();
+  if(name==='bookings') renderBookings();
+  if(name==='transactions') renderTransactions();
+  if(name==='customers') renderCustomers();
+  if(name==='stock') renderStock();
+  if(name==='reports') renderReports();
+}
+document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.nav)));
+document.getElementById('mobileMenuBtn')?.addEventListener('click',()=>{
+  const m=document.getElementById('mobileNav');
+  m.classList.toggle('hidden');
+  document.getElementById('mobileNavInner').innerHTML=document.querySelector('aside').innerHTML;
+});
+document.getElementById('mobileNav')?.addEventListener('click', e=>{
+  // Klik di luar panel (area gelap backdrop) menutup menu
+  if(e.target.id==='mobileNav'){ document.getElementById('mobileNav').classList.add('hidden'); return; }
+  // BUG LAMA: tombol nav yang di-klon lewat innerHTML di atas tidak punya event listener sendiri,
+  // jadi tap menu di HP tidak ngapa-ngapain. Diperbaiki pakai delegasi klik di sini.
+  const navBtn = e.target.closest('.nav-btn');
+  if(navBtn){ switchView(navBtn.dataset.nav); document.getElementById('mobileNav').classList.add('hidden'); }
+});
+document.getElementById('newTransactionBtn').addEventListener('click',()=>switchView('pos'));
+
+// ========= DASHBOARD =========
+function renderDashboard(){
+  const today=todayISO();
+  document.getElementById('todayLabel').textContent=today;
+  document.getElementById('scheduleDate').textContent=new Date().toLocaleDateString('id-ID',{weekday:'long', day:'numeric', month:'short'});
+  // KPI
+  const todayTx = transactions.filter(t=> (t.createdAt||'').slice(0,10)===today);
+  const omzet = todayTx.reduce((s,t)=> s + (t.paymentHistory||[]).filter(h=> (h.at||'').slice(0,10)===today).reduce((a,b)=>a+b.amount,0), 0) + bookings.filter(b=> (b.createdAt||'').slice(0,10)===today).reduce((s,b)=>s+(b.dp||0),0);
+  const piutang = transactions.filter(t=> t.status==='aktif' && (t.payment?.paidAmount||0) < grandTotalWithDenda(t)).reduce((s,t)=> s + (grandTotalWithDenda(t)-(t.payment?.paidAmount||0)),0);
+  const aktif = transactions.filter(t=> t.status==='aktif').length;
+  const aktifItems = transactions.filter(t=> t.status==='aktif').reduce((s,t)=> s + (t.items||[]).reduce((a,b)=>a+(b.qty||0),0),0);
+  const bookingBesok = bookings.filter(b=> b.status==='booking' && b.startDate===addDays(today,1)).length;
+
+  document.getElementById('kpiOmzet').textContent=fmt(omzet);
+  document.getElementById('kpiOmzetCount').textContent=todayTx.length;
+  document.getElementById('kpiPiutang').textContent=fmt(piutang);
+  document.getElementById('kpiPiutangCount').textContent=transactions.filter(t=> t.status==='aktif' && (t.payment?.paidAmount||0)<grandTotalWithDenda(t)).length+' pelanggan';
+  document.getElementById('kpiAktif').textContent=aktif;
+  document.getElementById('kpiAktifItems').textContent=aktifItems;
+  document.getElementById('kpiBooking').textContent=bookingBesok;
+  document.getElementById('activeBadge').textContent=aktif;
+
+  // Schedule today
+  const kembaliHariIni = transactions.filter(t=> t.status==='aktif' && t.endDate===today);
+  const berangkatHariIni = [...transactions.filter(t=> t.status==='aktif' && t.startDate===today), ...bookings.filter(b=> b.status==='booking' && b.startDate===today)];
+  const terlambat = transactions.filter(t=> t.status==='aktif' && t.endDate < today);
+  document.getElementById('radarKembali').textContent=kembaliHariIni.length;
+  document.getElementById('radarBerangkat').textContent=berangkatHariIni.length;
+  document.getElementById('radarTerlambat').textContent=terlambat.length;
+
+  const scheduleList=document.getElementById('scheduleList');
+  const allToday=[...kembaliHariIni.map(t=>({type:'kembali', data:t})), ...berangkatHariIni.map(b=>({type: b.total!==undefined && b.dp!==undefined ? 'booking-berangkat' : 'berangkat', data:b}))].sort((a,b)=> (a.data.customer?.name||'').localeCompare(b.data.customer?.name||''));
+  if(allToday.length===0){
+    scheduleList.innerHTML=`<div class="text-center py-12 border border-dashed border-[#232F2A] rounded-xl mono text-[12px] text-[#4A5A54]">Tidak ada jadwal hari ini — waktu yang pas untuk maintenance gear</div>`;
+  } else {
+    scheduleList.innerHTML=allToday.map(row=>{
+      const d=row.data;
+      const isKembali=row.type==='kembali';
+      return `<div class="flex items-center gap-3 p-3 rounded-xl bg-[#0C1210] border ${isKembali?'border-[#1E2C27]':'border-[#FF6A2A]/20'}">
+        <div class="w-10 h-10 rounded-full grid place-items-center ${isKembali?'bg-[#1A2420]':'bg-[#FF6A2A] text-black'} text-[14px]">${isKembali?'↩':'↗'}</div>
+        <div class="flex-1 min-w-0"><div class="mono text-[11px] font-semibold truncate">${d.customer?.name||'Tanpa Nama'} • ${d.customer?.phone||'-'}</div><div class="mono text-[10px] text-[#7A8D85] truncate">${(d.items||[]).slice(0,2).map(i=>i.name).join(', ')}${(d.items||[]).length>2?' +'+((d.items||[]).length-2):''} • ${isKembali?'KEMBALI':'BERANGKAT'} • ${d.endDate||d.startDate}</div></div>
+        <button onclick="openTxn('${d.id}')" class="chip">BUKA</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Radar
+  const rentedMap=getRentedMap();
+  const critical = allProducts().map(p=>{
+    const info=getStockInfo(p);
+    if(info.total===0) return null;
+    const ratio = info.available / info.total;
+    if(ratio<=0.3) return {...p, ...info, ratio};
+    return null;
+  }).filter(Boolean).sort((a,b)=>a.ratio-b.ratio).slice(0,6);
+  document.getElementById('radarList').innerHTML = critical.length ? critical.map(c=>`<div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0C1210] border border-[#1E2C27]"><div class="min-w-0"><div class="mono text-[11px] font-semibold truncate">${c.name}</div><div class="flex items-center gap-2 mt-1"><span class="dot ${c.available===0?'bg-[#FF4D4D]': c.available<=2?'bg-[#FF6A2A]':'bg-[#C6FF6B]'}"></span><span class="mono text-[10px] text-[#7A8D85]">${c.available}/${c.total} tersedia • ${c.rented} keluar</span></div></div><span class="mono text-[10px] ${c.available===0?'text-[#FF4D4D]':'text-[#FF8A4D]'} font-bold">${c.available===0?'HABIS':'KRITIS'}</span></div>`).join('') : `<div class="mono text-[11px] text-[#4A5A54]">Semua stok aman — tidak ada yang kritis</div>`;
+
+  // Trend 14 hari
+  const days=[...Array(14)].map((_,i)=> addDays(today, -13+i));
+  const trend = days.map(d=>{
+    const amount = [...transactions].reduce((s,t)=> s + (t.paymentHistory||[]).filter(h=> (h.at||'').slice(0,10)===d).reduce((a,b)=>a+b.amount,0), 0) + bookings.filter(b=> (b.createdAt||'').slice(0,10)===d).reduce((s,b)=>s+(b.dp||0),0);
+    return {date:d, amount};
+  });
+  const max = Math.max(1, ...trend.map(t=>t.amount));
+  document.getElementById('trendBars').innerHTML = trend.map(t=>`<div class="flex items-center gap-3"><div class="mono text-[10px] text-[#7A8D85] w-[52px]">${t.date.slice(5)}</div><div class="flex-1 h-7 bg-[#0C1210] rounded-full overflow-hidden border border-[#1E2C27]"><div class="h-full bg-[#E8E6DF] rounded-full" style="width:${(t.amount/max*100).toFixed(1)}%"></div></div><div class="mono text-[10px] w-[90px] text-right">${t.amount>0?fmt(t.amount):'-'}</div></div>`).join('');
+
+  // Top gear minggu ini
+  const weekStart=addDays(today,-7);
+  const counter={};
+  [...transactions.filter(t=> t.createdAt.slice(0,10)>=weekStart), ...bookings.filter(b=> b.createdAt.slice(0,10)>=weekStart)].forEach(tr=>{
+    (tr.items||[]).forEach(it=>{ counter[it.name]=(counter[it.name]||0)+(it.qty||0); });
+  });
+  const top = Object.entries(counter).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  document.getElementById('topGear').innerHTML = top.length ? top.map(([name,qty],i)=>`<div class="flex items-center justify-between p-2.5 rounded-xl bg-[#0C1210] border border-[#1E2C27]"><div class="flex items-center gap-2.5"><div class="w-7 h-7 rounded-full bg-[#1A2420] grid place-items-center mono text-[10px] font-bold">${i+1}</div><div class="mono text-[11px] font-medium">${name}</div></div><div class="mono text-[11px] font-bold">${qty} unit</div></div>`).join('') : `<div class="mono text-[11px] text-[#4A5A54]">Belum ada data minggu ini</div>`;
+}
+
+// ========= POS =========
+function renderPOS(){
+  const cats=['Semua', ...new Set(allProducts().map(p=>p.cat))];
+  document.getElementById('posCats').innerHTML = cats.map(c=>`<button class="chip ${posCategory===c?'active':''}" data-cat="${c}">${c}</button>`).join('');
+  document.querySelectorAll('#posCats [data-cat]').forEach(b=>b.addEventListener('click',()=>{ posCategory=b.dataset.cat; renderPOSGrid(); document.querySelectorAll('#posCats .chip').forEach(x=>x.classList.toggle('active', x.dataset.cat===posCategory)); }));
+
+  document.getElementById('posSearch').value=posQuery;
+  document.getElementById('posStart').value=posStartDate;
+  document.getElementById('posDur').value=posDuration;
+  document.getElementById('posEnd').textContent=addDays(posStartDate, posDuration);
+  document.getElementById('posJaminan').value=posJaminan;
+  document.getElementById('posMethod').value=posMethod;
+  document.getElementById('posPaid').value=posPaid||'';
+  document.getElementById('posDiscType').value=posDiscount.type;
+  document.getElementById('posDiscVal').value=posDiscount.value||'';
+
+  renderPOSGrid();
+  renderCart();
+  renderPosCustomer();
+  renderPosSummary();
+  renderQuickAmounts();
+}
+
+function renderPOSGrid(){
+  const q=posQuery.toLowerCase();
+  let items=allProducts().filter(p=>{
+    const catMatch=posCategory==='Semua'||p.cat===posCategory;
+    const queryMatch=!q||p.name.toLowerCase().includes(q);
+    return catMatch&&queryMatch;
+  }).sort((a,b)=>a.name.localeCompare(b.name));
+  const grid=document.getElementById('posGrid');
+  grid.innerHTML = items.map(p=>{
+    const stock=getStockInfo(p);
+    const inCart=cart[p.id]||0;
+    const statusColor = stock.available===0 ? 'bg-[#FF4D4D]' : stock.available<=2 ? 'bg-[#FF6A2A]' : 'bg-[#C6FF6B]';
+    const statusLabel = stock.total>0 ? `${stock.available}/${stock.total}` : `${stock.rented} keluar`;
+    return `<div class="card p-3 card-hover cursor-pointer group" data-id="${p.id}">
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0 flex-1"><div class="mono text-[11px] font-semibold leading-[1.2] line-clamp-2">${p.name}</div><div class="mono text-[10px] text-[#7A8D85] mt-1">${p.cat} • ${fmt(p.price)}/${p.unit||'Hari'}</div></div>
+        <span class="dot ${statusColor} shrink-0 mt-1"></span>
+      </div>
+      <div class="mt-3 flex items-center justify-between">
+        <span class="mono text-[10px] px-2 py-1 rounded-full bg-[#0C1210] border border-[#1E2C27] text-[#7A8D85]">${statusLabel}</span>
+        ${inCart?`<span class="mono text-[10px] bg-[#FF6A2A] text-black px-2 py-1 rounded-full font-bold">×${inCart}</span>`:`<span class="mono text-[10px] text-[#4A5A54] group-hover:text-[#E8E6DF]">+ TAMBAH</span>`}
+      </div>
+    </div>`;
+  }).join('');
+  grid.querySelectorAll('[data-id]').forEach(el=>el.addEventListener('click',()=>{
+    const id=el.dataset.id;
+    cart[id]=(cart[id]||0)+1;
+    save('basecamp_cart_v2', cart);
+    renderPOSGrid(); renderCart(); renderPosSummary();
+    toast('+ '+ (allProducts().find(p=>p.id===id)?.name||''));
+  }));
+}
+
+function renderCart(){
+  const entries=Object.entries(cart).map(([id,qty])=>{ const p=allProducts().find(x=>x.id===id); return p?{product:p, qty}:null }).filter(Boolean);
+  document.getElementById('cartCount').textContent=entries.reduce((s,e)=>s+e.qty,0);
+  document.getElementById('emptyCart').style.display=entries.length?'none':'block';
+  document.getElementById('cartList').innerHTML = entries.map(e=>`<div class="flex items-center gap-2 p-2.5 rounded-xl bg-[#0C1210] border border-[#1E2C27]">
+    <div class="flex-1 min-w-0"><div class="mono text-[11px] font-semibold truncate">${e.product.name}</div><div class="mono text-[10px] text-[#7A8D85]">${fmt(e.product.price)} × ${e.qty}</div></div>
+    <div class="flex items-center gap-1"><button class="w-7 h-7 rounded-full bg-[#1A2420] border border-[#232F2A]" data-dec="${e.product.id}">−</button><span class="mono text-[11px] w-6 text-center">${e.qty}</span><button class="w-7 h-7 rounded-full bg-[#1A2420] border border-[#232F2A]" data-inc="${e.product.id}">+</button></div>
+    <button class="w-7 h-7 rounded-full bg-[#1A2420] text-[#FF4D4D]" data-del="${e.product.id}">×</button>
+  </div>`).join('');
+  document.querySelectorAll('[data-inc]').forEach(b=>b.addEventListener('click',()=>{ cart[b.dataset.inc]++; save('basecamp_cart_v2',cart); renderPOSGrid(); renderCart(); renderPosSummary(); }));
+  document.querySelectorAll('[data-dec]').forEach(b=>b.addEventListener('click',()=>{ const id=b.dataset.dec; cart[id]=Math.max(0,(cart[id]||0)-1); if(cart[id]===0) delete cart[id]; save('basecamp_cart_v2',cart); renderPOSGrid(); renderCart(); renderPosSummary(); }));
+  document.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{ delete cart[b.dataset.del]; save('basecamp_cart_v2',cart); renderPOSGrid(); renderCart(); renderPosSummary(); }));
+}
+
+function renderPosCustomer(){
+  const box=document.getElementById('posCustomerBox');
+  if(posCustomer){
+    box.innerHTML=`<div class="p-3 rounded-xl bg-[#0C1210] border border-[#1E2C27] flex items-center justify-between"><div><div class="mono text-[12px] font-semibold">${posCustomer.name}</div><div class="mono text-[10px] text-[#7A8D85]">${posCustomer.phone}</div></div><button id="posChangeCust" class="chip">GANTI</button></div><input id="posCustNameEdit" value="${posCustomer.name}" class="mt-2 w-full bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2 mono text-[12px]" placeholder="Nama untuk transaksi ini">`;
+    document.getElementById('posChangeCust').addEventListener('click',()=>{ posCustomer=null; renderPosCustomer(); });
+    document.getElementById('posCustNameEdit').addEventListener('input',e=>{ posCustomer.name=e.target.value; });
+  } else {
+    const filtered = customers.filter(c=> !posCustomerQuery || c.name.toLowerCase().includes(posCustomerQuery.toLowerCase()) || c.phone.includes(posCustomerQuery));
+    box.innerHTML=`<div class="flex gap-2"><input id="posCustSearch" value="${posCustomerQuery}" placeholder="Cari pelanggan lama..." class="flex-1 bg-[#0C1210] border border-[#1E2C27] rounded-full px-4 py-2.5 mono text-[12px]"><button id="posNewCustBtn" class="btn-ghost rounded-full px-4 mono text-[11px]">+ BARU</button></div>
+      <div id="posCustResults" class="mt-2 max-h-[160px] overflow-auto space-y-1">${filtered.slice(0,8).map(c=>`<div class="p-2.5 rounded-xl bg-[#0C1210] border border-[#1E2C27] cursor-pointer hover:border-[#2A3E35] flex justify-between items-center" data-cid="${c.id}"><div><div class="mono text-[11px] font-semibold">${c.name}</div><div class="mono text-[10px] text-[#7A8D85]">${c.phone}</div></div><span class="mono text-[10px]">›</span></div>`).join('') || '<div class="mono text-[11px] text-[#4A5A54] p-2">Tidak ada pelanggan</div>'}</div>
+      <div id="posNewCustForm" class="hidden mt-3 p-3 rounded-xl bg-[#0C1210] border border-[#1E2C27] space-y-2"><input id="posNewName" placeholder="Nama pelanggan baru" class="w-full bg-[#121A17] border border-[#1E2C27] rounded-lg px-3 py-2 mono text-[12px]"><input id="posNewPhone" placeholder="No HP (62...)" class="w-full bg-[#121A17] border border-[#1E2C27] rounded-lg px-3 py-2 mono text-[12px]"><div class="flex gap-2"><button id="posSaveNewCust" class="btn-primary rounded-full px-4 py-2 mono text-[11px] flex-1">SIMPAN</button><button id="posCancelNewCust" class="btn-ghost rounded-full px-4 py-2 mono text-[11px]">BATAL</button></div></div>`;
+    document.getElementById('posCustSearch').addEventListener('input',e=>{ posCustomerQuery=e.target.value; renderPosCustomer(); });
+    document.getElementById('posNewCustBtn').addEventListener('click',()=> document.getElementById('posNewCustForm').classList.toggle('hidden'));
+    document.getElementById('posSaveNewCust')?.addEventListener('click',()=>{
+      const name=document.getElementById('posNewName').value.trim();
+      const phone=normalizePhone(document.getElementById('posNewPhone').value);
+      if(!name||!phone) return toast('Lengkapi nama & HP');
+      const c={id:uid(), name, phone}; customers.push(c); save('basecamp_customers', customers); posCustomer=c; posCustomerQuery=''; renderPosCustomer(); toast('Pelanggan baru disimpan');
+    });
+    document.getElementById('posCancelNewCust')?.addEventListener('click',()=> document.getElementById('posNewCustForm').classList.add('hidden'));
+    document.querySelectorAll('[data-cid]').forEach(el=>el.addEventListener('click',()=>{ posCustomer=customers.find(c=>c.id===el.dataset.cid); renderPosCustomer(); }));
+  }
+}
+
+function renderPosSummary(){
+  const entries=Object.entries(cart).map(([id,qty])=>{ const p=allProducts().find(x=>x.id===id); return p?{product:p, qty}:null }).filter(Boolean);
+  const unitSubtotal=entries.reduce((s,e)=> s + e.product.price*e.qty,0);
+  const periodSubtotal=unitSubtotal*posDuration;
+  let discountAmount=0;
+  if(posDiscount.type==='nominal') discountAmount=Math.min(posDiscount.value||0, periodSubtotal);
+  else if(posDiscount.type==='persen') discountAmount=Math.round(periodSubtotal* Math.min(posDiscount.value||0,100)/100);
+  const total=Math.max(0, periodSubtotal-discountAmount);
+  document.getElementById('posSubtotal').textContent=fmt(periodSubtotal);
+  document.getElementById('posTotal').textContent=fmt(total);
+  document.getElementById('posEnd').textContent=addDays(posStartDate, posDuration);
+}
+
+function renderQuickAmounts(){
+  const denoms=[20000,50000,100000,200000,300000,500000];
+  const {total}=calcTotals();
+  const chips = (total>0 ? [`<button class="chip" data-qa="${total}">Uang Pas (${fmt(total).replace('Rp ','')})</button>`] : [])
+    .concat(denoms.map(d=>`<button class="chip" data-qa="${d}">${fmt(d).replace('Rp ','')}</button>`));
+  document.getElementById('posQuickAmounts').innerHTML=chips.join('');
+  document.querySelectorAll('[data-qa]').forEach(b=>b.addEventListener('click',()=>{ posPaid=Number(b.dataset.qa); document.getElementById('posPaid').value=posPaid; }));
+}
+
+// POS events
+document.getElementById('posSearch').addEventListener('input',e=>{ posQuery=e.target.value; renderPOSGrid(); });
+document.getElementById('posStart').addEventListener('change',e=>{ posStartDate=e.target.value||todayISO(); renderPosSummary(); });
+document.getElementById('posDur').addEventListener('input',e=>{ posDuration=Math.max(1, Number(e.target.value)||1); renderPosSummary(); });
+document.querySelectorAll('.dur-btn').forEach(b=>b.addEventListener('click',()=>{ posDuration=Math.max(1, posDuration+Number(b.dataset.d)); document.getElementById('posDur').value=posDuration; renderPosSummary(); }));
+document.querySelectorAll('.dur-quick').forEach(b=>b.addEventListener('click',()=>{ posDuration=Number(b.dataset.q); document.getElementById('posDur').value=posDuration; renderPosSummary(); }));
+document.getElementById('posDiscType').addEventListener('change',e=>{ posDiscount.type=e.target.value; renderPosSummary(); });
+document.getElementById('posDiscVal').addEventListener('input',e=>{ posDiscount.value=Number(e.target.value)||0; renderPosSummary(); });
+document.getElementById('posJaminan').addEventListener('change',e=> posJaminan=e.target.value);
+document.getElementById('posMethod').addEventListener('change',e=> posMethod=e.target.value);
+document.getElementById('posPaid').addEventListener('input',e=> posPaid=Number(e.target.value)||0);
+
+// Checkout logic (compatible)
+function buildItems(){
+  return Object.entries(cart).map(([id,qty])=>{ const p=allProducts().find(x=>x.id===id); return {name:p.name, price:p.price, qty}; });
+}
+function calcTotals(){
+  const unitSubtotal=Object.entries(cart).reduce((s,[id,qty])=>{ const p=allProducts().find(x=>x.id===id); return s + (p? p.price*qty:0); },0);
+  const periodSubtotal=unitSubtotal*posDuration;
+  let discountAmount=0;
+  if(posDiscount.type==='nominal') discountAmount=Math.min(posDiscount.value||0, periodSubtotal);
+  else if(posDiscount.type==='persen') discountAmount=Math.round(periodSubtotal* Math.min(posDiscount.value||0,100)/100);
+  return {unitSubtotal, periodSubtotal, discountAmount, total: Math.max(0, periodSubtotal-discountAmount)};
+}
+function saveTransaction(isBooking){
+  const items=buildItems();
+  if(items.length===0) return toast('Keranjang kosong');
+  if(!posCustomer) return toast('Pilih pelanggan dulu');
+  const {periodSubtotal, discountAmount, total}=calcTotals();
+  const paid=posPaid||0;
+  const customer=posCustomer;
+  const common={
+    id:uid(),
+    customer,
+    items,
+    durationDays:posDuration,
+    startDate:posStartDate,
+    endDate:addDays(posStartDate, posDuration),
+    subtotal:periodSubtotal,
+    discount:{type:posDiscount.type, value:posDiscount.value||0, amount:discountAmount},
+    jaminan:{type:posJaminan, note:''},
+    total,
+    createdAt:new Date().toISOString()
+  };
+  if(isBooking){
+    const booking={...common, dp:paid, paymentMethod:posMethod, status:'booking'};
+    bookings.unshift(booking); save('basecamp_bookings', bookings);
+    toast('Booking disimpan — DP '+fmt(paid));
+  } else {
+    const paymentHistory = paid>0 ? [{id:uid(), amount:paid, method:posMethod, note:'Pembayaran awal', at:new Date().toISOString()}] : [];
+    const payment={status: paid>=total?'lunas': paid>0?'sebagian':'hutang', paidAmount:paid, method:posMethod};
+    const txn={...common, payment, paymentHistory, status:'aktif', dendaList:[], jaminanReturned:false};
+    // recompute
+    const totalPaid=paymentHistory.reduce((s,h)=>s+h.amount,0);
+    txn.payment.paidAmount=totalPaid;
+    txn.payment.status = totalPaid>=total?'lunas': totalPaid>0?'sebagian':'hutang';
+    addTransactionRemoteSafe(txn);
+    toast('Transaksi aktif — '+fmt(total));
+  }
+  cart={}; save('basecamp_cart_v2', cart);
+  posPaid=0; renderPOS(); renderDashboard();
+}
+document.getElementById('posCheckoutBtn').addEventListener('click',()=>saveTransaction(false));
+document.getElementById('posBookingBtn').addEventListener('click',()=>saveTransaction(true));
+
+// ========= BOOKINGS =========
+function renderBookings(){
+  document.getElementById('bookingChips').innerHTML = ['Semua','Hari Ini','Besok','Terlambat'].map(s=>`<button class="chip ${bookingFilter===s?'active':''}" data-bf="${s}">${s}</button>`).join('');
+  document.querySelectorAll('[data-bf]').forEach(b=>b.addEventListener('click',()=>{ bookingFilter=b.dataset.bf; renderBookings(); }));
+  document.getElementById('bookingSearch').value=bookingQuery;
+  let list=bookings.filter(b=> b.status==='booking');
+  if(bookingFilter==='Hari Ini') list=list.filter(b=> b.startDate===todayISO());
+  if(bookingFilter==='Besok') list=list.filter(b=> b.startDate===addDays(todayISO(),1));
+  if(bookingFilter==='Terlambat') list=list.filter(b=> b.startDate < todayISO());
+  if(bookingQuery) list=list.filter(b=> (b.customer?.name||'').toLowerCase().includes(bookingQuery.toLowerCase()) || (b.customer?.phone||'').includes(bookingQuery));
+  document.getElementById('bookingList').innerHTML = list.length ? list.map(b=>{
+    const isLate=b.startDate < todayISO();
+    return `<div class="card p-4 ${isLate?'border-[#FF4D4D]/30':''}">
+      <div class="flex items-start justify-between gap-2"><div class="mono text-[11px] font-bold">${b.customer?.name}</div><span class="chip ${isLate?'bg-[#FF4D4D] text-black border-[#FF4D4D]':'bg-[#C6FF6B] text-black border-[#C6FF6B]'} text-[9px]">${isLate?'LATE':'BOOKING'}</span></div>
+      <div class="mono text-[10px] text-[#7A8D85] mt-1">${b.customer?.phone} • ${b.startDate} → ${b.endDate} • ${b.durationDays} hari</div>
+      <div class="mono text-[11px] mt-3 space-y-1">${(b.items||[]).map(it=>`<div class="flex justify-between"><span class="truncate pr-2">${it.name} ×${it.qty}</span><span>${fmt(it.price*it.qty)}</span></div>`).join('')}</div>
+      <div class="mt-3 flex items-center justify-between border-t border-[#1C2A24] pt-3"><div><div class="mono text-[10px] text-[#7A8D85]">TOTAL • DP</div><div class="mono text-[12px] font-bold">${fmt(b.total)} • ${fmt(b.dp)}</div></div><div class="flex gap-1.5"><button class="chip" onclick="activateBooking('${b.id}')">AKTIFKAN</button><button class="chip" onclick="openBooking('${b.id}')">DETAIL</button></div></div>
+    </div>`;
+  }).join('') : `<div class="col-span-full text-center py-16 mono text-[12px] text-[#4A5A54]">Tidak ada booking — semua clear</div>`;
+}
+document.getElementById('bookingSearch').addEventListener('input',e=>{ bookingQuery=e.target.value; renderBookings(); });
+
+function activateBooking(id){
+  const b=bookings.find(x=>x.id===id);
+  if(!b) return;
+  const txn={
+    id:uid(),
+    customer:b.customer,
+    items:b.items,
+    durationDays:b.durationDays,
+    startDate:b.startDate,
+    endDate:b.endDate,
+    subtotal:b.subtotal,
+    discount:b.discount,
+    jaminan:b.jaminan,
+    total:b.total,
+    payment:{status: (b.dp||0)>=b.total?'lunas': (b.dp||0)>0?'sebagian':'hutang', paidAmount:b.dp||0, method:b.paymentMethod},
+    paymentHistory: b.dp>0 ? [{id:uid(), amount:b.dp, method:b.paymentMethod, note:'DP Booking', at:b.createdAt}] : [],
+    status:'aktif',
+    dendaList:[],
+    jaminanReturned:false,
+    fromBookingId:b.id,
+    createdAt:new Date().toISOString()
+  };
+  addTransactionRemoteSafe(txn);
+  b.status='diaktifkan'; b.linkedTxnId=txn.id; save('basecamp_bookings', bookings);
+  toast('Booking diaktifkan jadi transaksi');
+  renderBookings(); renderDashboard();
+}
+function openBooking(id){
+  const b=bookings.find(x=>x.id===id);
+  if(!b) return;
+  openDrawer('BOOKING • '+b.customer?.name, `<div class="space-y-4">
+    <div class="mono text-[11px]">Customer: ${b.customer?.name} — ${b.customer?.phone}<br>Periode: ${b.startDate} → ${b.endDate} (${b.durationDays} hari)<br>Total: ${fmt(b.total)} • DP: ${fmt(b.dp)}</div>
+    <div class="space-y-2">${(b.items||[]).map(it=>`<div class="flex justify-between mono text-[12px]"><span>${it.name} ×${it.qty}</span><span>${fmt(it.price*it.qty)}</span></div>`).join('')}</div>
+    <div class="flex gap-2"><button class="btn-primary rounded-full px-4 py-2.5 mono text-[11px] flex-1" onclick="activateBooking('${b.id}'); closeDrawer()">AKTIFKAN SEKARANG</button><button class="btn-ghost rounded-full px-4 py-2.5 mono text-[11px]" onclick="deleteBooking('${b.id}')">HAPUS</button></div>
+  </div>`);
+}
+function deleteBooking(id){
+  if(!confirm('Hapus booking ini?')) return;
+  bookings=bookings.filter(b=>b.id!==id); save('basecamp_bookings', bookings); closeDrawer(); renderBookings(); toast('Booking dihapus');
+}
+
+// ========= TRANSACTIONS =========
+function renderTransactions(){
+  document.getElementById('txnStatusChips').innerHTML = ['Semua','Aktif','Terlambat','Selesai','Hutang'].map(s=>`<button class="chip ${txnFilter===s?'active':''}" data-tf="${s}">${s}</button>`).join('');
+  document.querySelectorAll('[data-tf]').forEach(b=>b.addEventListener('click',()=>{ txnFilter=b.dataset.tf; renderTransactions(); }));
+  document.getElementById('txnSearch').value=txnQuery;
+  document.getElementById('txnMethodFilter').value=txnMethodFilter;
+  document.getElementById('txnDateStart').value=txnDateStart;
+  document.getElementById('txnDateEnd').value=txnDateEnd;
+  let list=[...transactions];
+  if(txnFilter==='Aktif') list=list.filter(t=> t.status==='aktif');
+  if(txnFilter==='Terlambat') list=list.filter(t=> t.status==='aktif' && t.endDate < todayISO());
+  if(txnFilter==='Selesai') list=list.filter(t=> t.status==='selesai');
+  if(txnFilter==='Hutang') list=list.filter(t=> (t.payment?.paidAmount||0) < grandTotalWithDenda(t));
+  if(txnMethodFilter!=='semua') list=list.filter(t=> (t.payment?.method||(t.paymentHistory||[])[0]?.method)===txnMethodFilter);
+  if(txnDateStart) list=list.filter(t=> (t.createdAt||'').slice(0,10) >= txnDateStart);
+  if(txnDateEnd) list=list.filter(t=> (t.createdAt||'').slice(0,10) <= txnDateEnd);
+  if(txnQuery) list=list.filter(t=> (t.customer?.name||'').toLowerCase().includes(txnQuery.toLowerCase()) || (t.customer?.phone||'').includes(txnQuery) || (t.items||[]).some(it=> it.name.toLowerCase().includes(txnQuery.toLowerCase())));
+  const methodTotal = txnMethodFilter!=='semua' ? list.reduce((s,t)=>s+(t.payment?.paidAmount||0),0) : null;
+  document.getElementById('txnList').innerHTML = (methodTotal!==null ? `<div class="mono text-[10.5px] text-[#7A8D85] mb-1">Total ${txnMethodFilter.toUpperCase()} pada filter ini: <b class="text-[#E8E6DF]">${fmt(methodTotal)}</b> dari ${list.length} transaksi</div>` : '') + (list.length ? list.map(t=>{
+    const terlambat = t.status==='aktif' && t.endDate < todayISO();
+    const hutang = (t.payment?.paidAmount||0) < grandTotalWithDenda(t);
+    return `<div class="card p-4 flex flex-col md:flex-row gap-4 items-start md:items-center hover:border-[#2A3E35] cursor-pointer" onclick="openTxn('${t.id}')">
+      <div class="w-12 h-12 rounded-full ${terlambat?'bg-[#FF4D4D] text-black': t.status==='aktif'?'bg-[#E8E6DF] text-black':'bg-[#1A2420]'} grid place-items-center mono text-[11px] font-bold shrink-0">${t.status==='aktif'?(terlambat?'!':'A'):'✓'}</div>
+      <div class="flex-1 min-w-0"><div class="flex items-center gap-2"><span class="mono text-[12px] font-bold truncate">${t.customer?.name}</span><span class="mono text-[10px] px-2 py-0.5 rounded-full border ${hutang?'bg-[#FF6A2A]/20 border-[#FF6A2A]/30 text-[#FF6A2A]':'bg-[#C6FF6B]/10 border-[#C6FF6B]/20 text-[#C6FF6B]'}">${t.payment?.status?.toUpperCase()}</span><span class="mono text-[10px] text-[#4A5A54]">${t.startDate} → ${t.endDate}</span></div><div class="mono text-[11px] text-[#7A8D85] truncate mt-1">${(t.items||[]).map(i=> i.name+' ×'+i.qty).join(' • ')}</div></div>
+      <div class="text-right shrink-0"><div class="mono text-[12px] font-bold">${fmt(t.total)}</div><div class="mono text-[10px] ${hutang?'text-[#FF6A2A]':'text-[#7A8D85]'}">${hutang? 'Sisa '+fmt(grandTotalWithDenda(t)-(t.payment?.paidAmount||0)) : 'Lunas'} • ${t.durationDays} hari</div></div>
+    </div>`;
+  }).join('') : `<div class="text-center py-16 mono text-[12px] text-[#4A5A54]">Tidak ada transaksi</div>`);
+}
+document.getElementById('txnSearch').addEventListener('input',e=>{ txnQuery=e.target.value; renderTransactions(); });
+document.getElementById('txnMethodFilter').addEventListener('change',e=>{ txnMethodFilter=e.target.value; renderTransactions(); });
+document.getElementById('txnDateStart').addEventListener('change',e=>{ txnDateStart=e.target.value; renderTransactions(); });
+document.getElementById('txnDateEnd').addEventListener('change',e=>{ txnDateEnd=e.target.value; renderTransactions(); });
+document.getElementById('txnDateClear').addEventListener('click',()=>{ txnDateStart=''; txnDateEnd=''; renderTransactions(); });
+document.getElementById('txnDateYesterday').addEventListener('click',()=>{
+  const y=addDays(todayISO(),-1);
+  txnDateStart=y; txnDateEnd=y;
+  renderTransactions();
+});
+
+function dendaTotal(t){ return (t.dendaList||[]).reduce((s,d)=>s+(Number(d.amount)||0),0); }
+function grandTotalWithDenda(t){ return (t.total||0) + dendaTotal(t); }
+
+function openTxn(id){
+  const t=transactions.find(x=>x.id===id);
+  if(!t) return;
+  const denda=dendaTotal(t);
+  const grand=grandTotalWithDenda(t);
+  const hutang=grand-(t.payment?.paidAmount||0);
+  const jaminanAktif = t.jaminan && t.jaminan.type && t.jaminan.type!=='none';
+  const jaminanLabel = j=> !j || j.type==='none' ? '-' : (j.type.toUpperCase())+(j.note?` (${j.note})`:'');
+  openDrawer(`TRANSAKSI • ${t.customer?.name}`, `
+    <div class="space-y-5">
+      <div class="grid grid-cols-2 gap-2">
+        <div class="card p-3"><div class="mono text-[9px] text-[#7A8D85]">CUSTOMER</div><div class="mono text-[12px] font-bold mt-1">${t.customer?.name}<br><span class="text-[#7A8D85] font-normal">${t.customer?.phone}</span></div></div>
+        <div class="card p-3"><div class="mono text-[9px] text-[#7A8D85]">PERIODE</div><div class="mono text-[12px] font-bold mt-1">${t.startDate} → ${t.endDate}<br><span class="text-[#7A8D85] font-normal">${t.durationDays} hari • ${t.status.toUpperCase()}</span></div></div>
+      </div>
+      <div><div class="display font-bold text-[12px]">ITEMS</div><div class="mt-2 space-y-2">${(t.items||[]).map((it,idx)=>`<div class="flex justify-between items-center mono text-[12px] p-2.5 rounded-xl bg-[#121A17] border border-[#1E2C27]"><span>${it.name} • ${fmt(it.price)}/hari</span><span class="flex items-center gap-2">${t.status==='aktif'?`<button onclick="editTxnItemQty('${t.id}',${idx},-1)" class="w-6 h-6 rounded bg-[#0C1210] border border-[#1E2C27]">−</button>`:''}<b>×${it.qty}</b>${t.status==='aktif'?`<button onclick="editTxnItemQty('${t.id}',${idx},1)" class="w-6 h-6 rounded bg-[#0C1210] border border-[#1E2C27]">+</button>`:''}<span class="w-20 text-right">${fmt(it.price*it.qty*t.durationDays)}</span>${t.status==='aktif'?`<button onclick="removeTxnItem('${t.id}',${idx})" class="text-[#FF4D4D]">✕</button>`:''}</span></div>`).join('')}</div><div class="mt-3 flex justify-between mono text-[12px] font-bold border-t border-[#1C2A24] pt-3"><span>SUBTOTAL</span><span>${fmt(t.subtotal||0)}</span></div><div class="flex justify-between mono text-[11px] text-[#7A8D85]"><span>Diskon</span><span>- ${fmt(t.discount?.amount||0)}</span></div><div class="flex justify-between mono text-[13px] font-extrabold"><span>TOTAL SEWA</span><span>${fmt(t.total)}</span></div></div>
+
+      <div>
+        <div class="display font-bold text-[12px] flex items-center justify-between">DENDA / BIAYA TAMBAHAN ${denda>0?`<span class="mono text-[10px] font-normal text-[#FF6A2A]">+${fmt(denda)}</span>`:''}</div>
+        <div class="mt-2 space-y-1.5">${(t.dendaList||[]).map(d=>`<div class="flex justify-between items-center mono text-[11px] p-2 rounded-lg bg-[#0C1210] border border-[#1E2C27]"><span>${d.reason}</span><span class="flex items-center gap-2"><b>${fmt(d.amount)}</b><button onclick="deleteDenda('${t.id}','${d.id}')" class="text-[#FF4D4D]">✕</button></span></div>`).join('') || '<div class="mono text-[11px] text-[#4A5A54]">Tidak ada denda</div>'}</div>
+        <div class="grid grid-cols-[1fr_120px_auto] gap-2 mt-2">
+          <input id="dendaReason" placeholder="Alasan (mis. telat 1 hari)" class="bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2.5 mono text-[11px]">
+          <input id="dendaAmount" type="number" placeholder="Nominal" class="bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2.5 mono text-[11px]">
+          <button onclick="addDenda('${t.id}')" class="btn-ghost rounded-lg px-3 mono text-[11px]">+ TAMBAH</button>
+        </div>
+      </div>
+
+      <div><div class="display font-bold text-[12px]">PEMBAYARAN</div><div class="mt-2 space-y-1.5">${(t.paymentHistory||[]).map(h=>`<div class="flex justify-between mono text-[11px] p-2 rounded-lg bg-[#0C1210] border border-[#1E2C27]"><span>${(h.at||'').slice(0,10)} • ${h.method} • ${h.note||''}</span><span class="font-bold">${fmt(h.amount)}</span></div>`).join('') || '<div class="mono text-[11px] text-[#4A5A54]">Belum ada pembayaran</div>'}<div class="mt-2 p-3 rounded-xl ${hutang>0?'bg-[#FF6A2A]/10 border border-[#FF6A2A]/20':'bg-[#C6FF6B]/10 border border-[#C6FF6B]/20'}"><div class="mono text-[11px]">Total + Denda: <b>${fmt(grand)}</b> • Dibayar: <b>${fmt(t.payment?.paidAmount||0)}</b> • Sisa: <b>${fmt(Math.max(0,hutang))}</b></div></div></div>
+      <div class="grid grid-cols-2 gap-2">
+        <input id="payAmount" type="number" placeholder="Nominal bayar" class="bg-[#0C1210] border border-[#1E2C27] rounded-xl px-3 py-3 mono text-[12px]">
+        <select id="payMethod" class="bg-[#0C1210] border border-[#1E2C27] rounded-xl px-3 py-3 mono text-[12px]"><option value="cash">Cash</option><option value="qris">QRIS</option><option value="transfer">Transfer</option></select>
+      </div>
+      <div class="flex gap-2 flex-wrap">${[
+        hutang>0 ? `<button type="button" class="chip" onclick="document.getElementById('payAmount').value=${Math.max(0,hutang)}">Lunasi Sisa (${fmt(Math.max(0,hutang)).replace('Rp ','')})</button>` : '',
+        ...[20000,50000,100000,200000,300000,500000].map(d=>`<button type="button" class="chip" onclick="document.getElementById('payAmount').value=${d}">${fmt(d).replace('Rp ','')}</button>`)
+      ].join('')}</div>
+      <button class="w-full btn-primary rounded-full py-3 mono text-[11px]" onclick="addPayment('${t.id}')">TAMBAH BAYAR</button>
+
+      <div>
+        <div class="display font-bold text-[12px]">JAMINAN</div>
+        <div class="card p-3 mt-2 flex items-center justify-between">
+          <div class="mono text-[11px]">${jaminanLabel(t.jaminan)}</div>
+          ${!jaminanAktif ? '<span class="mono text-[10px] text-[#4A5A54]">TIDAK ADA</span>'
+            : t.jaminanReturned ? '<span class="mono text-[10px] text-[#C6FF6B]">✓ SUDAH DIKEMBALIKAN</span>'
+            : `<button onclick="returnJaminan('${t.id}')" class="chip bg-[#C6FF6B] text-black border-[#C6FF6B] text-[10px]">KEMBALIKAN JAMINAN</button>`}
+        </div>
+      </div>
+
+      <button class="w-full btn-ghost rounded-full py-3 mono text-[11px]" onclick="extendTxn('${t.id}')">📅 PERPANJANG SEWA</button>
+      <div class="grid grid-cols-2 gap-2">
+        <button class="btn-ghost rounded-full py-3 mono text-[11px]" onclick="finishTxn('${t.id}')">${t.status==='aktif'?'SELESAIKAN TRANSAKSI': 'AKTIFKAN LAGI'}</button>
+        <button class="btn-ghost rounded-full py-3 mono text-[11px] text-[#FF4D4D] border-[#FF4D4D]/20" onclick="deleteTxn('${t.id}')">HAPUS</button>
+      </div>
+      <button class="w-full btn-ghost rounded-full py-3 mono text-[11px]" onclick="shareWA('${t.id}')">📲 KIRIM KWITANSI WA</button>
+    </div>
+  `);
+}
+function addDenda(id){
+  const t=transactions.find(x=>x.id===id);
+  const reason=document.getElementById('dendaReason').value.trim();
+  const amount=Number(document.getElementById('dendaAmount').value)||0;
+  if(!reason || amount<=0) return toast('Isi alasan & nominal denda dulu');
+  t.dendaList=t.dendaList||[];
+  t.dendaList.push({id:uid(), reason, amount, at:new Date().toISOString()});
+  save('basecamp_transactions', transactions);
+  toast('Denda '+fmt(amount)+' ditambahkan');
+  openTxn(id); renderTransactions(); renderDashboard();
+}
+function deleteDenda(id, dendaId){
+  const t=transactions.find(x=>x.id===id);
+  t.dendaList=(t.dendaList||[]).filter(d=>d.id!==dendaId);
+  save('basecamp_transactions', transactions);
+  openTxn(id); renderTransactions(); renderDashboard();
+}
+function returnJaminan(id){
+  const t=transactions.find(x=>x.id===id);
+  const denda=dendaTotal(t);
+  const grand=grandTotalWithDenda(t);
+  const sisa=grand-(t.payment?.paidAmount||0);
+  if(sisa>0 && !confirm('Masih ada tagihan belum lunas '+fmt(sisa)+(denda>0?' (termasuk denda '+fmt(denda)+')':'')+'. Tetap kembalikan jaminan?')) return;
+  t.jaminanReturned=true;
+  save('basecamp_transactions', transactions);
+  toast('Jaminan dikembalikan ke pelanggan');
+  openTxn(id); renderTransactions();
+}
+function addPayment(id){
+  const t=transactions.find(x=>x.id===id);
+  const amount=Number(document.getElementById('payAmount').value)||0;
+  const method=document.getElementById('payMethod').value;
+  if(amount<=0) return toast('Nominal tidak valid');
+  t.paymentHistory=t.paymentHistory||[];
+  t.paymentHistory.push({id:uid(), amount, method, note:'Pembayaran', at:new Date().toISOString()});
+  const totalPaid=t.paymentHistory.reduce((s,h)=>s+h.amount,0);
+  const grand=grandTotalWithDenda(t);
+  t.payment.paidAmount=totalPaid;
+  t.payment.status= totalPaid>=grand ? 'lunas' : totalPaid>0?'sebagian':'hutang';
+  save('basecamp_transactions', transactions);
+  toast('Pembayaran '+fmt(amount)+' tercatat');
+  openTxn(id); renderTransactions(); renderDashboard();
+}
+function recomputeTxnTotals(t){
+  t.subtotal = (t.items||[]).reduce((s,i)=>s+i.price*i.qty, 0) * (t.durationDays||1);
+  t.total = Math.max(0, t.subtotal - (t.discount?.amount||0));
+  const grand = grandTotalWithDenda(t);
+  const paid = t.payment?.paidAmount||0;
+  t.payment.status = paid>=grand ? 'lunas' : paid>0 ? 'sebagian' : 'hutang';
+}
+function editTxnItemQty(id, idx, delta){
+  const t=transactions.find(x=>x.id===id);
+  if(!t || !t.items[idx]) return;
+  t.items[idx].qty = Math.max(1, (t.items[idx].qty||1)+delta);
+  recomputeTxnTotals(t);
+  save('basecamp_transactions', transactions);
+  openTxn(id); renderTransactions(); renderDashboard();
+}
+function removeTxnItem(id, idx){
+  const t=transactions.find(x=>x.id===id);
+  if(!t || !t.items[idx]) return;
+  if(t.items.length<=1) return toast('Tidak bisa menghapus barang terakhir — hapus transaksinya saja kalau memang batal');
+  if(!confirm('Hapus "'+t.items[idx].name+'" dari transaksi ini?')) return;
+  t.items.splice(idx,1);
+  recomputeTxnTotals(t);
+  save('basecamp_transactions', transactions);
+  openTxn(id); renderTransactions(); renderDashboard();
+}
+function extendTxn(id){
+  const t=transactions.find(x=>x.id===id);
+  const extraStr=prompt('Perpanjang sewa berapa hari lagi?', '1');
+  if(extraStr===null) return;
+  const extra=Math.max(0, Math.floor(Number(extraStr)||0));
+  if(extra<=0) return toast('Jumlah hari tidak valid');
+  const unitSubtotal=(t.items||[]).reduce((s,i)=>s+i.price*i.qty,0);
+  const extraCost=unitSubtotal*extra;
+  t.durationDays=(t.durationDays||1)+extra;
+  t.endDate=addDays(t.endDate, extra);
+  t.extendLog=t.extendLog||[];
+  t.extendLog.push({id:uid(), days:extra, cost:extraCost, at:new Date().toISOString()});
+  recomputeTxnTotals(t);
+  save('basecamp_transactions', transactions);
+  toast(`Diperpanjang ${extra} hari — tambahan biaya ${fmt(extraCost)}`);
+  openTxn(id); renderTransactions(); renderDashboard();
+}
+function finishTxn(id){
+  const t=transactions.find(x=>x.id===id);
+  if(t.status==='aktif'){
+    const grand=grandTotalWithDenda(t);
+    if((t.payment?.paidAmount||0) < grand && !confirm('Masih ada sisa '+fmt(grand-(t.payment?.paidAmount||0))+', tetap selesaikan?')) return;
+    // CATATAN: menyelesaikan transaksi TIDAK otomatis menandai jaminan sudah kembali —
+    // itu tindakan terpisah lewat tombol "KEMBALIKAN JAMINAN" di atas, supaya kasir sadar
+    // betul barang & jaminan sudah benar-benar dicek sebelum jaminan dilepas ke pelanggan.
+    t.status='selesai'; save('basecamp_transactions', transactions);
+    toast('Transaksi selesai — barang kembali');
+  } else {
+    t.status='aktif'; save('basecamp_transactions', transactions); toast('Transaksi diaktifkan kembali');
+  }
+  closeDrawer(); renderTransactions(); renderDashboard();
+}
+function deleteTxn(id){
+  if(!confirm('Hapus transaksi? Data dipindah ke Terhapus')) return;
+  const idx=transactions.findIndex(x=>x.id===id);
+  if(idx>-1){ const [rem]=transactions.splice(idx,1); deletedTransactions.unshift(rem); save('basecamp_transactions', transactions); save('basecamp_deleted_transactions', deletedTransactions); }
+  closeDrawer(); renderTransactions(); renderDashboard(); toast('Dipindah ke terhapus');
+}
+function shareWA(id){
+  const t=transactions.find(x=>x.id===id);
+  const denda=dendaTotal(t);
+  const grand=grandTotalWithDenda(t);
+  const dendaLines = (t.dendaList||[]).map(d=>`- Denda: ${d.reason} — ${fmt(d.amount)}`).join('%0A');
+  const text=`*PROF CAMPING - KWITANSI*%0A%0ANama: ${t.customer?.name}%0APeriode: ${t.startDate} → ${t.endDate} (${t.durationDays} hari)%0ATotal Sewa: ${fmt(t.total)}${denda>0?`%0A${dendaLines}%0ATotal + Denda: ${fmt(grand)}`:''}%0ADibayar: ${fmt(t.payment?.paidAmount||0)}%0ASisa: ${fmt(Math.max(0,grand-(t.payment?.paidAmount||0)))}%0A%0AItems:%0A${(t.items||[]).map(i=>`- ${i.name} ×${i.qty}`).join('%0A')}%0A%0ATerima kasih!`;
+  window.open(`https://wa.me/${normalizePhone(t.customer?.phone)}?text=${text}`, '_blank');
+}
+
+// ========= CUSTOMERS =========
+function renderCustomers(){
+  const q=custQuery.toLowerCase();
+  let list=customers.filter(c=> !q || c.name.toLowerCase().includes(q) || c.phone.includes(q)).sort((a,b)=> a.name.localeCompare(b.name));
+  document.getElementById('custList').innerHTML = list.length ? list.map(c=>{
+    const txCount=transactions.filter(t=> t.customer?.id===c.id || t.customer?.phone===c.phone).length;
+    const hutang=transactions.filter(t=> (t.customer?.id===c.id||t.customer?.phone===c.phone) && t.status==='aktif' && (t.payment?.paidAmount||0)<grandTotalWithDenda(t)).reduce((s,t)=>s+(grandTotalWithDenda(t)-(t.payment?.paidAmount||0)),0);
+    return `<div class="card p-4"><div class="flex items-start justify-between"><div><div class="mono text-[13px] font-bold">${c.name}</div><div class="mono text-[11px] text-[#7A8D85] mt-0.5">${c.phone}</div></div><span class="chip">${txCount} TRX</span></div><div class="mt-3 flex items-center justify-between"><span class="mono text-[11px] ${hutang>0?'text-[#FF6A2A]':'text-[#7A8D85]'}">${hutang>0?'Sisa '+fmt(hutang):'Lunas semua'}</span><button class="chip" onclick="openCustomer('${c.id}')">RIWAYAT</button></div></div>`;
+  }).join('') : `<div class="col-span-full text-center py-16 mono text-[12px] text-[#4A5A54]">Belum ada pelanggan</div>`;
+}
+document.getElementById('custSearch').addEventListener('input',e=>{ custQuery=e.target.value; renderCustomers(); });
+document.getElementById('addCustBtn').addEventListener('click',()=>{
+  const name=prompt('Nama pelanggan:'); if(!name) return;
+  const phoneRaw=prompt('No HP (08... atau 62...):'); if(!phoneRaw) return;
+  const phone=normalizePhone(phoneRaw); if(!phone) return;
+  customers.push({id:uid(), name:name.trim(), phone}); save('basecamp_customers', customers); renderCustomers(); toast('Pelanggan ditambahkan');
+});
+function openCustomer(id){
+  const c=customers.find(x=>x.id===id);
+  const txs=transactions.filter(t=> t.customer?.id===id || t.customer?.phone===c.phone).sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+  openDrawer('PELANGGAN • '+c.name, `<div class="space-y-4"><div class="mono text-[11px]">HP: ${c.phone}<br>Total transaksi: ${txs.length}</div><div class="space-y-2">${txs.map(t=>`<div class="p-3 rounded-xl bg-[#121A17] border border-[#1E2C27]"><div class="flex justify-between mono text-[11px]"><span>${t.startDate} → ${t.endDate}</span><span class="${t.status==='aktif'?'text-[#FF6A2A]':'text-[#7A8D85]'}">${t.status.toUpperCase()}</span></div><div class="mono text-[11px] mt-1 truncate">${(t.items||[]).map(i=>i.name+' ×'+i.qty).join(', ')}</div><div class="mono text-[11px] font-bold mt-1">${fmt(t.total)} • ${t.payment?.status}</div></div>`).join('') || '<div class="mono text-[11px] text-[#4A5A54]">Belum ada transaksi</div>'}</div></div>`);
+}
+
+// ========= STOCK =========
+function renderStock(){
+  const items=allProducts().map(p=>{
+    const s=getStockInfo(p);
+    return {...p, ...s};
+  }).sort((a,b)=> a.name.localeCompare(b.name));
+  document.getElementById('stockTable').innerHTML = `<div class="overflow-auto"><table class="w-full mono text-[11px]"><thead class="text-[#7A8D85] text-[10px] tracking-widest"><tr class="border-b border-[#1C2A24]"><th class="text-left py-2.5 font-normal">GEAR</th><th class="text-center py-2.5 font-normal">TOTAL</th><th class="text-center py-2.5 font-normal">BERSIH</th><th class="text-center py-2.5 font-normal">KELUAR</th><th class="text-center py-2.5 font-normal">TERSEDIA</th><th class="text-right py-2.5 font-normal">AKSI</th></tr></thead><tbody>${items.map(it=>`<tr class="border-b border-[#121A17] hover:bg-[#0C1210]"><td class="py-3 pr-2"><div class="font-semibold">${it.name}</div><div class="text-[10px] text-[#7A8D85]">${it.cat}</div></td><td class="text-center"><input data-stock="total" data-id="${it.id}" value="${it.total||0}" class="w-14 bg-[#0C1210] border border-[#1E2C27] rounded-lg px-2 py-1 text-center"></td><td class="text-center"><input data-stock="bersih" data-id="${it.id}" value="${it.bersih||0}" class="w-14 bg-[#0C1210] border border-[#1E2C27] rounded-lg px-2 py-1 text-center"></td><td class="text-center ${it.rented>0?'text-[#FF6A2A] font-bold':''}">${it.rented}</td><td class="text-center"><span class="px-2 py-1 rounded-full ${it.available===0?'bg-[#FF4D4D] text-black': it.available<=2?'bg-[#FF6A2A] text-black':'bg-[#C6FF6B] text-black'} font-bold">${it.available>900?'∞':it.available}</span></td><td class="text-right"><button class="chip" data-save="${it.id}">SIMPAN</button></td></tr>`).join('')}</tbody></table></div>`;
+  document.querySelectorAll('[data-save]').forEach(b=>b.addEventListener('click',()=>{
+    const id=b.dataset.save;
+    const totalInput=document.querySelector(`[data-stock="total"][data-id="${id}"]`);
+    const bersihInput=document.querySelector(`[data-stock="bersih"][data-id="${id}"]`);
+    const total=Number(totalInput.value)||0;
+    const bersih=Number(bersihInput.value)||0;
+    productStock[id]={...(productStock[id]||{}), total, bersih, jenisProses: (productStock[id]?.jenisProses||'none')};
+    save('basecamp_product_stock', productStock);
+    toast('Stok disimpan'); renderDashboard();
+  }));
+}
+
+// ========= REPORTS =========
+let reportCustomStart='', reportCustomEnd='';
+function renderReports(){
+  document.querySelectorAll('.report-range').forEach(b=>b.classList.toggle('active', b.dataset.r===reportRange));
+  document.getElementById('reportCustomDates').classList.toggle('hidden', reportRange!=='custom');
+  let start, end;
+  const today=todayISO();
+  if(reportRange==='today'){ start=today; end=today; }
+  else if(reportRange==='yesterday'){ start=addDays(today,-1); end=addDays(today,-1); }
+  else if(reportRange==='week'){ start=addDays(today,-6); end=today; }
+  else if(reportRange==='month'){ start=today.slice(0,7)+'-01'; end=today; }
+  else if(reportRange==='custom'){
+    start=reportCustomStart||today; end=reportCustomEnd||today;
+    if(start>end){ const tmp=start; start=end; end=tmp; }
+  }
+  else { start='2000-01-01'; end=today; }
+  const inRange = (date)=> date>=start && date<=end;
+  const txInRange = transactions.filter(t=> inRange((t.createdAt||'').slice(0,10)));
+  const payInRange = [];
+  transactions.forEach(t=> (t.paymentHistory||[]).forEach(h=>{ if(inRange((h.at||'').slice(0,10))) payInRange.push({...h, customer:t.customer?.name}); }));
+  bookings.forEach(b=>{ if(inRange((b.createdAt||'').slice(0,10))) payInRange.push({at:b.createdAt, amount:b.dp||0, method:b.paymentMethod, note:'DP Booking '+ (b.customer?.name||''), customer:b.customer?.name}); });
+  const totalMasuk = payInRange.reduce((s,h)=>s+h.amount,0);
+  const piutangRange = txInRange.filter(t=> (t.payment?.paidAmount||0)<grandTotalWithDenda(t)).reduce((s,t)=>s+(grandTotalWithDenda(t)-(t.payment?.paidAmount||0)),0);
+  document.getElementById('reportContent').innerHTML = `
+    <div class="mono text-[10px] text-[#7A8D85]">Periode: <b class="text-[#E8E6DF]">${start}</b> s.d. <b class="text-[#E8E6DF]">${end}</b></div>
+    <div class="grid grid-cols-3 gap-2">
+      <div class="card p-3"><div class="mono text-[9px] text-[#7A8D85]">MASUK PERIODE</div><div class="display text-[16px] font-extrabold mt-1">${fmt(totalMasuk)}</div><div class="mono text-[10px] text-[#7A8D85] mt-1">${payInRange.length} pembayaran</div></div>
+      <div class="card p-3"><div class="mono text-[9px] text-[#7A8D85]">TRANSAKSI</div><div class="display text-[16px] font-extrabold mt-1">${txInRange.length}</div><div class="mono text-[10px] text-[#7A8D85] mt-1">dibuat periode ini</div></div>
+      <div class="card p-3"><div class="mono text-[9px] text-[#7A8D85]">PIUTANG</div><div class="display text-[16px] font-extrabold mt-1">${fmt(piutangRange)}</div><div class="mono text-[10px] text-[#FF6A2A] mt-1">belum lunas</div></div>
+    </div>
+    <div class="card p-3 mt-3"><div class="display text-[12px] font-bold">TRANSAKSI PERIODE INI (${txInRange.length})</div><div class="mt-3 space-y-1.5 max-h-[220px] overflow-auto">${txInRange.slice().reverse().map(t=>`<div class="flex justify-between items-center mono text-[11px] p-2 rounded-lg bg-[#0C1210] border border-[#1E2C27] cursor-pointer hover:border-[#2A3E35]" onclick="switchView('transactions'); setTimeout(()=>openTxn('${t.id}'),0)"><span>${(t.createdAt||'').slice(0,10)} • ${t.customer?.name}</span><span class="font-bold">${fmt(t.total)}</span></div>`).join('') || '<div class="mono text-[11px] text-[#4A5A54]">Tidak ada transaksi di periode ini</div>'}</div></div>
+    <div class="card p-3 mt-3"><div class="display text-[12px] font-bold">RINCIAN PEMBAYARAN</div><div class="mt-3 space-y-1.5 max-h-[320px] overflow-auto">${payInRange.slice().reverse().map(h=>`<div class="flex justify-between mono text-[11px] p-2 rounded-lg bg-[#0C1210] border border-[#1E2C27]"><span>${(h.at||'').slice(0,10)} • ${h.method} • ${h.customer||''} • ${h.note||''}</span><span class="font-bold">${fmt(h.amount)}</span></div>`).join('') || '<div class="mono text-[11px] text-[#4A5A54]">Tidak ada pembayaran di periode ini</div>'}</div></div>
+  `;
+  renderKas();
+}
+document.querySelectorAll('.report-range').forEach(b=>b.addEventListener('click',()=>{ reportRange=b.dataset.r; renderReports(); }));
+document.getElementById('reportStart').addEventListener('change', e=>{ reportCustomStart=e.target.value; renderReports(); });
+document.getElementById('reportEnd').addEventListener('change', e=>{ reportCustomEnd=e.target.value; renderReports(); });
+
+// ========= KAS HARIAN (buka kasir -> catat pengeluaran -> tutup kasir & hitung selisih) =========
+let kasDate = todayISO();
+function kasHariOf(date){
+  return kasHarian[date] || { modalAwal:0, pengeluaran:[], ditutup:false, uangFisik:null, selisih:null, closedAt:null };
+}
+function setKasHari(date, patch){
+  kasHarian[date] = { ...kasHariOf(date), ...patch };
+  save('basecamp_kas_harian', kasHarian);
+}
+function cashInForDate(date){
+  let total=0;
+  transactions.forEach(t=> (t.paymentHistory||[]).forEach(h=>{ if(h.method==='cash' && (h.at||'').slice(0,10)===date) total+=h.amount; }));
+  bookings.forEach(b=>{ if(b.paymentMethod==='cash' && (b.createdAt||'').slice(0,10)===date) total += (b.dp||0); });
+  return total;
+}
+function pengeluaranTotalForDate(date){
+  return (kasHariOf(date).pengeluaran||[]).reduce((s,p)=>s+(Number(p.amount)||0),0);
+}
+function expectedCashForDate(date){
+  const k=kasHariOf(date);
+  return (k.modalAwal||0) + cashInForDate(date) - pengeluaranTotalForDate(date);
+}
+function renderKas(){
+  const date=kasDate;
+  const dateInput=document.getElementById('kasDate');
+  if(dateInput && dateInput.value!==date) dateInput.value=date;
+  const k=kasHariOf(date);
+  const cashIn=cashInForDate(date);
+  const pengeluaranTotal=pengeluaranTotalForDate(date);
+  const expected=expectedCashForDate(date);
+  const body=document.getElementById('kasBody');
+  if(!body) return;
+
+  if(k.ditutup){
+    const selisih=k.selisih||0;
+    const selisihColor = selisih===0 ? 'text-[#C6FF6B]' : selisih>0 ? 'text-[#E8B23D]' : 'text-[#FF4D4D]';
+    body.innerHTML = `
+      <div class="card p-3 bg-[#0C1210]">
+        <div class="mono text-[10px] text-[#C6FF6B] font-bold mb-2">🔒 KASIR SUDAH DITUTUP</div>
+        <div class="mono text-[11px] space-y-1.5">
+          <div class="flex justify-between"><span class="text-[#7A8D85]">Modal Awal</span><span>${fmt(k.modalAwal)}</span></div>
+          <div class="flex justify-between"><span class="text-[#7A8D85]">Uang Masuk (Cash)</span><span>${fmt(cashIn)}</span></div>
+          <div class="flex justify-between"><span class="text-[#7A8D85]">Pengeluaran</span><span>−${fmt(pengeluaranTotal)}</span></div>
+          <div class="flex justify-between font-bold border-t border-[#1C2A24] pt-1.5 mt-1.5"><span>Seharusnya di Laci</span><span>${fmt(expected)}</span></div>
+          <div class="flex justify-between"><span class="text-[#7A8D85]">Uang Fisik Dihitung</span><span>${fmt(k.uangFisik)}</span></div>
+          <div class="flex justify-between font-bold ${selisihColor}"><span>Selisih</span><span>${selisih>0?'+':''}${fmt(selisih)}</span></div>
+        </div>
+      </div>
+      <button id="reopenKasBtn" class="w-full btn-ghost rounded-full py-2.5 mono text-[11px] mt-3">🔓 BUKA LAGI KASIR</button>
+    `;
+    document.getElementById('reopenKasBtn').addEventListener('click', ()=>{
+      if(!confirm('Buka lagi kasir tanggal '+date+'? Selisih yang sudah dihitung akan direset.')) return;
+      setKasHari(date, { ditutup:false, uangFisik:null, selisih:null, closedAt:null });
+      renderKas();
+    });
+    return;
+  }
+
+  const pengeluaranList=(k.pengeluaran||[]).map(p=>`<div class="flex justify-between items-center mono text-[10.5px] p-2 rounded-lg bg-[#0C1210] border border-[#1E2C27]"><span>${p.desc}</span><span class="flex items-center gap-2"><b class="text-[#FF4D4D]">−${fmt(p.amount)}</b><button data-delexp="${p.id}" class="text-[#FF4D4D]">✕</button></span></div>`).join('') || '<div class="mono text-[10.5px] text-[#4A5A54]">Belum ada pengeluaran</div>';
+
+  body.innerHTML = `
+    <div class="mono text-[10px] text-[#7A8D85] mb-1">MODAL AWAL</div>
+    <input id="kasModalAwal" type="number" value="${k.modalAwal||0}" placeholder="Contoh: 500000" class="w-full bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2 mono text-[11px] mb-3">
+    <div class="card p-3 bg-[#0C1210] mono text-[11px] space-y-1.5 mb-3">
+      <div class="flex justify-between text-[#C6FF6B]"><span>Uang Masuk (Cash) hari ini</span><span>+${fmt(cashIn)}</span></div>
+      <div class="flex justify-between text-[#FF4D4D]"><span>Total Pengeluaran</span><span>−${fmt(pengeluaranTotal)}</span></div>
+      <div class="flex justify-between font-bold border-t border-[#1C2A24] pt-1.5"><span>Seharusnya di Laci</span><span>${fmt(expected)}</span></div>
+    </div>
+    <div class="mono text-[10px] text-[#7A8D85] mb-1">PENGELUARAN</div>
+    <div class="space-y-1.5 mb-2 max-h-[160px] overflow-auto">${pengeluaranList}</div>
+    <div class="flex gap-2 mb-3">
+      <input id="kasDesc" placeholder="Keterangan" class="flex-1 bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2 mono text-[11px]">
+      <input id="kasAmount" type="number" placeholder="Nominal" class="w-24 bg-[#0C1210] border border-[#1E2C27] rounded-lg px-3 py-2 mono text-[11px]">
+      <button id="kasAdd" class="btn-ghost rounded-lg px-3 mono text-[11px]">+</button>
+    </div>
+    <button id="closeKasBtn" class="w-full btn-primary rounded-full py-2.5 mono text-[11px]">🔒 TUTUP KASIR</button>
+  `;
+
+  document.getElementById('kasModalAwal').addEventListener('change', e=>{
+    setKasHari(date, { modalAwal: Number(e.target.value)||0 });
+  });
+  document.getElementById('kasAdd').addEventListener('click', ()=>{
+    const desc=document.getElementById('kasDesc').value.trim();
+    const amount=Number(document.getElementById('kasAmount').value)||0;
+    if(!desc || amount<=0) return toast('Isi keterangan & nominal pengeluaran dulu');
+    const list=[...(kasHariOf(date).pengeluaran||[]), {id:uid(), desc, amount, at:new Date().toISOString()}];
+    setKasHari(date, { pengeluaran:list });
+    toast('Pengeluaran dicatat');
+    renderKas();
+  });
+  body.querySelectorAll('[data-delexp]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const list=(kasHariOf(date).pengeluaran||[]).filter(p=>p.id!==btn.dataset.delexp);
+      setKasHari(date, { pengeluaran:list });
+      renderKas();
+    });
+  });
+  document.getElementById('closeKasBtn').addEventListener('click', ()=>{
+    const uangFisikStr=prompt('Hitung fisik uang di laci sekarang (Rp):');
+    if(uangFisikStr===null) return;
+    const uangFisik=Math.max(0, Number(uangFisikStr)||0);
+    const exp=expectedCashForDate(date);
+    const selisih=uangFisik-exp;
+    if(!confirm('Tutup kasir untuk '+date+'? Selisih: '+fmt(selisih)+'. Tidak bisa diedit lagi kecuali dibuka ulang.')) return;
+    setKasHari(date, { ditutup:true, uangFisik, selisih, closedAt:new Date().toISOString() });
+    toast('Kasir ditutup');
+    renderKas();
+  });
+}
+document.getElementById('kasDate').addEventListener('change', e=>{
+  kasDate = e.target.value || todayISO();
+  renderKas();
+});
+
+// ========= DRAWER =========
+function openDrawer(title, html){
+  document.getElementById('drawerTitle').textContent=title;
+  document.getElementById('drawerContent').innerHTML=html;
+  document.getElementById('drawerOverlay').classList.remove('hidden');
+  document.getElementById('drawer').classList.remove('translate-x-full');
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.add('translate-x-full');
+  document.getElementById('drawerOverlay').classList.add('hidden');
+}
+document.getElementById('drawerClose').addEventListener('click', closeDrawer);
+document.getElementById('drawerOverlay').addEventListener('click', closeDrawer);
+
+// ========= UTILS =========
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.remove('hidden');
+  setTimeout(()=> t.classList.add('hidden'), 2200);
+}
+function backup(){
+  const data={};
+  ['basecamp_customers','basecamp_transactions','basecamp_deleted_transactions','basecamp_bookings','basecamp_custom_products','basecamp_product_overrides','basecamp_product_stock','basecamp_kas_harian'].forEach(k=> data[k]=load(k,null));
+  const blob=new Blob([JSON.stringify({exportedAt:new Date().toISOString(), data}, null,2)], {type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`prof-camping-backup-${todayISO()}.json`; a.click();
+}
+document.getElementById('backupBtn').addEventListener('click', backup);
+
+// ========= CLOCK & INIT =========
+setInterval(()=>{ const now=new Date(); document.getElementById('clock').textContent= now.toLocaleTimeString('id-ID',{hour:'2-digit', minute:'2-digit'})+' WITA'; },1000);
+switchView('dashboard');
+renderDashboard();
+
+// Global search CMD+K
+document.addEventListener('keydown',e=>{
+  if((e.metaKey||e.ctrlKey)&& e.key.toLowerCase()==='k'){ e.preventDefault(); document.getElementById('globalSearch')?.focus(); }
+  if((e.metaKey||e.ctrlKey)&& ['1','2'].includes(e.key)){ e.preventDefault(); if(e.key==='1') switchView('dashboard'); if(e.key==='2') switchView('pos'); }
+});
+document.getElementById('globalSearch').addEventListener('input',e=>{
+  const q=e.target.value.toLowerCase();
+  if(!q) return;
+  if(q.length<2) return;
+  // quick jump to POS search if matches product
+  posQuery=q; switchView('pos'); renderPOSGrid();
+});
+
+// ========= LOGIN ADMIN + SINKRON DATA (FIREBASE) =========
+// Pakai project Firebase yang sama dengan Prof Camping utama, jadi akun admin yang sama juga
+// berlaku di sini. Data pelanggan & transaksi disinkronkan ke Firestore yang sama dengan app
+// utama (koleksi "prof_camping_data", dokumen "basecamp_customers" & "basecamp_transactions") —
+// jadi struk yang diinput di sini akan kebaca juga di app utama, dan sebaliknya.
+const firebaseConfig = {
+  apiKey: "AIzaSyD_HTaCk6Bv_GVpzE0Nh_033rZ6SMHbz3Q",
+  authDomain: "profcamping-3396a.firebaseapp.com",
+  projectId: "profcamping-3396a",
+  storageBucket: "profcamping-3396a.firebasestorage.app",
+  messagingSenderId: "1018588273596",
+  appId: "1:1018588273596:web:5dc20386584bad104869b9"
+};
+let auth = null;
+try{
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+}catch(err){ console.error("Gagal menyiapkan login:", err); }
+
+const loginScreenEl = document.getElementById('loginScreen');
+const appEl = document.getElementById('app');
+const loginEmailEl = document.getElementById('loginEmail');
+const loginPasswordEl = document.getElementById('loginPassword');
+const loginBtnEl = document.getElementById('loginBtn');
+const loginErrorEl = document.getElementById('loginError');
+
+let syncStarted = false;
+function startFirestoreSync(){
+  if(syncStarted) return; // jangan pasang listener dobel kalau login/logout berkali-kali
+  syncStarted = true;
+  try{ db = firebase.firestore(); db.settings({ ignoreUndefinedProperties: true }); }
+  catch(err){ console.error("Gagal menyiapkan Firestore:", err); return; }
+
+  const syncLabelEl = document.getElementById('syncLabel');
+  let pendingDocs = FIRESTORE_SYNCED_KEYS.length;
+  function markOneSynced(){
+    pendingDocs = Math.max(0, pendingDocs-1);
+    if(syncLabelEl) syncLabelEl.textContent = pendingDocs>0 ? '● MENYAMBUNGKAN…' : '● LOCAL + CLOUD';
+  }
+  function rerenderCurrentView(){
+    // Panggil ulang render untuk layar yang sedang dibuka, plus dashboard (dia menampilkan
+    // ringkasan lintas-data jadi sebaiknya selalu ikut ter-update).
+    renderDashboard?.();
+    const map = { pos:renderPOS, bookings:renderBookings, transactions:renderTransactions, customers:renderCustomers, stock:renderStock, reports:renderReports };
+    map[activeView]?.();
+  }
+
+  function watch(key, applyFn){
+    db.collection('prof_camping_data').doc(key).onSnapshot(snap=>{
+      if(snap.exists && snap.data().value!==undefined){
+        applyFn(snap.data().value);
+        localStorage.setItem(key, JSON.stringify(snap.data().value));
+        rerenderCurrentView();
+      }
+      markOneSynced();
+    }, err=>{ console.error(key, err); if(syncLabelEl) syncLabelEl.textContent = '● SINKRON GAGAL'; });
+  }
+
+  watch('basecamp_customers', v=>{ customers = v; });
+  watch('basecamp_transactions', v=>{ transactions = v; });
+  watch('basecamp_deleted_transactions', v=>{ deletedTransactions = v; });
+  watch('basecamp_bookings', v=>{ bookings = v; });
+  watch('basecamp_custom_products', v=>{ customProducts = v; });
+  watch('basecamp_product_overrides', v=>{ productOverrides = v; });
+  watch('basecamp_product_stock', v=>{ productStock = v; });
+  watch('basecamp_kas_harian', v=>{ kasHarian = v; });
+}
+
+// Tambah transaksi baru dengan aman: baca dulu data transaksi TERBARU dari server, baru
+// disisipkan transaksi barunya di situ. Ini mencegah transaksi yang hampir bersamaan dibuat
+// dari app utama (di device lain) jadi tertimpa/hilang.
+async function addTransactionRemoteSafe(txn){
+  // Optimistic: langsung tampil di layar duluan, baru menyusul disinkronkan ke server di belakang layar.
+  transactions.unshift(txn);
+  localStorage.setItem('basecamp_transactions', JSON.stringify(transactions));
+  if(!db) return;
+  const ref = db.collection('prof_camping_data').doc('basecamp_transactions');
+  try{
+    await db.runTransaction(async tx=>{
+      const snap = await tx.get(ref);
+      const current = snap.exists ? (snap.data().value||[]) : [];
+      const withoutDup = current.filter(t=>t.id!==txn.id); // jaga-jaga kalau listener sempat mendahului
+      tx.set(ref, { value: [txn, ...withoutDup], updatedAt: Date.now() });
+    });
+  }catch(err){ console.error('Gagal simpan transaksi ke server, tersimpan lokal saja:', err); }
+}
+
+if(auth){
+  auth.onAuthStateChanged(user=>{
+    if(user){
+      loginScreenEl.hidden = true;
+      appEl.hidden = false;
+      startFirestoreSync();
+    } else {
+      loginScreenEl.hidden = false;
+      appEl.hidden = true;
+    }
+  });
+
+  function doLogin(){
+    const email = loginEmailEl.value.trim();
+    const password = loginPasswordEl.value;
+    if(!email || !password){ loginErrorEl.textContent = "Isi email dan password dulu."; return; }
+    loginBtnEl.disabled = true; loginBtnEl.textContent = "MEMPROSES…"; loginErrorEl.textContent = "";
+    auth.signInWithEmailAndPassword(email, password)
+      .catch(()=>{ loginErrorEl.textContent = "Email atau password salah."; })
+      .finally(()=>{ loginBtnEl.disabled = false; loginBtnEl.textContent = "MASUK"; });
+  }
+  loginBtnEl.addEventListener('click', doLogin);
+  loginPasswordEl.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+
+  // Delegasi klik supaya tombol "KELUAR" tetap berfungsi walau elemennya digandakan
+  // ke menu mobile (lihat mobileNavInner.innerHTML = aside.innerHTML di atas).
+  document.addEventListener('click', e=>{
+    if(e.target.closest('.logout-btn')) auth.signOut();
+  });
+} else {
+  // Firebase gagal dimuat (mis. offline saat pertama kali buka): jangan kunci total,
+  // biar admin tetap bisa kerja — tapi tetap tampilkan pesan supaya sadar login/sinkron belum aktif.
+  loginScreenEl.hidden = true;
+  appEl.hidden = false;
+  console.warn("Login & sinkron tidak aktif karena Firebase gagal dimuat — aplikasi tetap terbuka pakai data lokal saja.");
+}
+
+
+// Expose
+window.openTxn=openTxn;
+window.openBooking=openBooking;
+window.activateBooking=activateBooking;
+window.deleteBooking=deleteBooking;
+window.openCustomer=openCustomer;
+window.addPayment=addPayment;
+window.finishTxn=finishTxn;
+window.deleteTxn=deleteTxn;
+window.shareWA=shareWA;
+</script>
+<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script></body>
+</html>
