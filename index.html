@@ -2540,6 +2540,7 @@ function renderTransaksi(){
       const cnt = f==='Hampir Selesai' ? soonCount : f==='Terlambat' ? lateCount : f==='Terhapus' ? deletedTransactions.length : null;
       return `<button class="chip ${txnFilter===f?'active':''} ${f==='Terlambat'?'late':''}" data-f="${f}">${cnt!=null && cnt>0 ? `<span class="cnt">${cnt}</span>` : ""}${f.toUpperCase()}</button>`;
     }).join("")}</div>
+    <button id="exportTodayWaBtn" class="save-btn" style="margin:4px 0 14px; background:var(--ok); color:#1B1512;">📤 Kirim Rekap Hari Ini ke WA Owner (${todaysTransactions().length})</button>
   `;
 
   if(list.length===0){
@@ -2594,6 +2595,8 @@ function renderTransaksi(){
   transaksiEl.querySelectorAll("[data-open-detail]").forEach(card=>{
     card.addEventListener("click", ()=>{ txnDetailId = card.dataset.openDetail; renderTransaksi(); });
   });
+  const exportTodayWaBtn = document.getElementById("exportTodayWaBtn");
+  if(exportTodayWaBtn) exportTodayWaBtn.addEventListener("click", exportTodaySummaryToWA);
 }
 
 // ---- Layar Detail Transaksi (dibuka dari daftar ringkas di atas) ----
@@ -3350,6 +3353,63 @@ function toleransiLine(endDateIso){
 function buildReturnReminderMessage(t){
   const itemsList = t.items.map(i=>`${i.name} ×${i.qty}`).join(", ");
   return `Halo ${t.customer.name||'Kak'}, 👋\n\nPengingat dari Prof Camping — sewa alat kamu (${itemsList}) batas pengembaliannya *HARI INI, jam 20:00 WITA*.\n\nMohon dikembalikan tepat waktu ya, biar bisa segera kami cek & bersihkan untuk penyewa berikutnya. Keterlambatan akan dikenakan biaya sewa tambahan sesuai ketentuan yang berlaku.\n\nTerima kasih! 🙏`;
+}
+
+// ================= EXPORT REKAP TRANSAKSI HARI INI KE WA OWNER =================
+// Menggabungkan SEMUA transaksi yang dibuat hari ini (berdasarkan tanggal createdAt, yaitu
+// saat kasir menyimpan transaksinya) jadi satu pesan WhatsApp, lalu dikirim sekaligus ke
+// nomor WA_NUMBER_ADMIN (owner). Tidak menghapus/menandai transaksi apa pun, hanya membaca.
+function todaysTransactions(){
+  const today = todayISO();
+  return transactions
+    .filter(t => (t.createdAt || "").slice(0, 10) === today)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+}
+
+function buildTodaySummaryMessage(){
+  const div = "━━━━━━━━━━━━━━━";
+  const today = todayISO();
+  const list = todaysTransactions();
+  if(list.length === 0) return null;
+
+  let omzet = 0, terbayar = 0, jmlHutang = 0;
+  let msg = `🏕️ *PROF CAMPING — REKAP TRANSAKSI HARI INI*\n📅 ${fmtDateFull(today)}\n${div}\n`;
+
+  list.forEach((t, idx) => {
+    const payLabel = t.payment.status === 'hutang' ? 'BELUM BAYAR'
+      : t.payment.status === 'sebagian' ? 'SEBAGIAN'
+      : 'LUNAS';
+    const itemsStr = t.items.map(i => `${i.name} ×${i.qty}`).join(", ");
+    const sisa = t.total - (t.payment.paidAmount || 0);
+
+    msg += `\n${idx + 1}. *${t.customer.name}* (${txnNo(t)})\n`;
+    msg += `   📦 ${itemsStr}\n`;
+    msg += `   💰 ${fmt(t.total)} — *${payLabel}*`;
+    msg += (t.payment.status === "sebagian" || t.payment.status === "hutang") ? ` (sisa ${fmt(sisa)})\n` : `\n`;
+
+    omzet += t.total;
+    terbayar += (t.payment.paidAmount || 0);
+    if(t.payment.status !== "lunas") jmlHutang++;
+  });
+
+  msg += `\n${div}\n`;
+  msg += `Jumlah transaksi : *${list.length}*\n`;
+  msg += `Total omzet      : *${fmt(omzet)}*\n`;
+  msg += `Total diterima   : *${fmt(terbayar)}*\n`;
+  if(omzet - terbayar > 0) msg += `Sisa piutang     : *${fmt(omzet - terbayar)}*\n`;
+  if(jmlHutang > 0) msg += `Transaksi belum lunas: *${jmlHutang}*\n`;
+  msg += `${div}\n🙏 Rekap otomatis dari aplikasi kasir Prof Camping.`;
+
+  return msg;
+}
+
+function exportTodaySummaryToWA(){
+  const msg = buildTodaySummaryMessage();
+  if(!msg){
+    alert("Belum ada transaksi yang dibuat hari ini untuk diekspor.");
+    return;
+  }
+  window.open(`https://wa.me/${WA_NUMBER_ADMIN}?text=${encodeURIComponent(msg)}`, "_blank");
 }
 
 function buildReceiptMessage(t){
