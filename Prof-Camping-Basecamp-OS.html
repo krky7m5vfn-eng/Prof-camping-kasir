@@ -1047,7 +1047,7 @@ function syncTransactionsToSheet(list){
     metodeBayar: t.payment.method||"cash",
     totalDendaBelumLunas: (t.dendaList||[]).filter(d=>!d.paid).reduce((s,d)=>s+d.amount,0),
     jaminan: t.jaminan && t.jaminan.type!=="none" ? jaminanLabel(t.jaminan) : "-",
-    statusJaminan: t.jaminan && t.jaminan.type!=="none" ? (t.jaminanReturned ? "Sudah Dikembalikan" : "Ditahan") : "-",
+    statusJaminan: t.jaminan && t.jaminan.type!=="none" ? (isJaminanHeld(t) ? "Ditahan" : "Sudah Dikembalikan") : "-",
   }));
   // mode:"no-cors" + Content-Type text/plain supaya jadi "simple request" (Apps Script Web App tidak menangani preflight OPTIONS)
   fetch(GOOGLE_SHEETS_URL, {
@@ -1196,6 +1196,16 @@ function selectHtml(id, options, selectedValue, extraAttrs=""){
   }</select>`;
 }
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+// Nomor HP SELALU disimpan & dipakai dalam format 62xxxxxxxxxxx (tanpa +, spasi, atau strip) —
+// format ini yang dikenali link WhatsApp (wa.me). Diterima dalam bentuk apapun yang orang ketik:
+// "+62 812-3456-7890", "0812 3456 7890", "812-3456-7890", dsb — semua otomatis dirapikan.
+function normalizePhone(raw){
+  let digits = String(raw||"").replace(/[^0-9]/g, "");
+  if(!digits) return "";
+  if(digits.startsWith("0")) digits = "62" + digits.slice(1);
+  else if(!digits.startsWith("62")) digits = "62" + digits;
+  return digits;
+}
 // Debounce: tunda eksekusi sampai user berhenti mengetik sejenak, biar pencarian di data besar
 // (ribuan pelanggan) tidak bikin keyboard/ketikan terasa berat di tiap huruf.
 function debounce(fn, delay){
@@ -1210,14 +1220,72 @@ const addDays = (iso,n) => { const d=new Date(iso+"T00:00:00"); d.setDate(d.getD
 
 // ---------- persisted state ----------
 function load(key, fallback){ try{ const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
+
+// Kunci yang datanya berupa ARRAY (transaksi, terhapus, booking, pelanggan) — di sini paling rawan
+// "hilang" kalau device lain nambah/ubah data hampir bersamaan: sebelumnya save() langsung nimpa
+// SELURUH array ke server pakai data lokal yang bisa saja sudah ketinggalan (mis. belum sempat
+// nerima tambahan dari device lain), jadi tambahan device lain itu ikut ketimpa & lenyap — bukan
+// lewat fitur hapus, makanya tidak muncul di "Terhapus". Kunci-kunci ini sekarang disinkronkan
+// pakai saveArraySafely() (baca dulu versi server TERBARU, gabung perubahan kita ke situ, baru
+// simpan) supaya tidak ada perubahan device lain yang ketiban.
+const SAFE_ARRAY_SYNC_KEYS = ["basecamp_transactions","basecamp_deleted_transactions","basecamp_bookings","basecamp_customers"];
+// Salinan independen (deep clone) dari versi TERAKHIR yang kita tahu sama persis dengan server,
+// per key — dipakai buat menghitung apa saja yang BENERAN kita ubah (bukan menganggap seluruh
+// array lokal itu "kebenaran mutlak").
+const syncBaseline = {};
+
 function save(key, val){
   try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
   if(firebaseEnabled && FIRESTORE_SYNCED_KEYS.includes(key)){
-    db.collection("prof_camping_data").doc(key).set({ value: val, updatedAt: Date.now() })
-      .catch(err=>console.error("Gagal sinkron ke Firebase untuk", key, err));
+    if(SAFE_ARRAY_SYNC_KEYS.includes(key)){
+      saveArraySafely(key, val);
+    } else {
+      db.collection("prof_camping_data").doc(key).set({ value: val, updatedAt: Date.now() })
+        .catch(err=>console.error("Gagal sinkron ke Firebase untuk", key, err));
+    }
   }
   if(key==="basecamp_transactions" && googleSheetsEnabled){
     syncTransactionsToSheetDebounced(val);
+  }
+}
+
+// Simpan array (transaksi/pelanggan/dst) dengan aman: baca dulu versi TERBARU dari server, hitung
+// apa saja yang berubah di sisi kita sejak sinkron terakhir (ditambah/dihapus/diedit — dibandingkan
+// ke "syncBaseline"), lalu terapkan HANYA perubahan itu ke atas data server yang paling baru. Kalau
+// device lain sempat menambah/mengubah entri LAIN di waktu hampir bersamaan, perubahan mereka tetap
+// utuh — tidak ikut ketiban.
+async function saveArraySafely(key, localVal){
+  if(!(firebaseEnabled && db)) return;
+  const ref = db.collection("prof_camping_data").doc(key);
+  const baseline = syncBaseline[key] || [];
+  const baselineById = new Map(baseline.map(x=>[x.id, x]));
+  const localIds = new Set(localVal.map(x=>x.id));
+  const removedIds = [...baselineById.keys()].filter(id=>!localIds.has(id));
+  const addedOrChanged = localVal.filter(x=>{
+    const before = baselineById.get(x.id);
+    return !before || JSON.stringify(before)!==JSON.stringify(x);
+  });
+  // Tidak ada perubahan nyata dibanding baseline (mis. render ulang tanpa mutasi) — tidak perlu ke server.
+  if(removedIds.length===0 && addedOrChanged.length===0) return;
+  try{
+    const merged = await db.runTransaction(async (tx)=>{
+      const snap = await tx.get(ref);
+      const serverArr = snap.exists ? (snap.data().value||[]) : [];
+      const byId = new Map(serverArr.map(x=>[x.id, x]));
+      removedIds.forEach(id=>byId.delete(id));
+      addedOrChanged.forEach(x=>byId.set(x.id, x));
+      const result = [];
+      serverArr.forEach(x=>{ if(byId.has(x.id)){ result.push(byId.get(x.id)); byId.delete(x.id); } });
+      // sisanya di byId = entri baru yang belum pernah ada di server — taruh paling depan (kebiasaan
+      // transaksi baru yang di-unshift supaya tampil di atas daftar).
+      const brandNew = addedOrChanged.filter(x=>byId.has(x.id));
+      const finalArr = [...brandNew, ...result];
+      tx.set(ref, { value: finalArr, updatedAt: Date.now() });
+      return finalArr;
+    });
+    syncBaseline[key] = JSON.parse(JSON.stringify(merged));
+  }catch(err){
+    console.error("Gagal sinkron aman ke Firebase untuk", key, err);
   }
 }
 
@@ -1234,7 +1302,7 @@ async function addNewTransactionSafely(txnWithoutNo){
     return txnWithoutNo;
   }
   const txnRef = db.collection("prof_camping_data").doc("basecamp_transactions");
-  await db.runTransaction(async (tx)=>{
+  const finalArr = await db.runTransaction(async (tx)=>{
     const snap = await tx.get(txnRef);
     const currentServer = snap.exists ? (snap.data().value||[]) : [];
     let maxNum = 0;
@@ -1243,8 +1311,11 @@ async function addNewTransactionSafely(txnWithoutNo){
       if(m) maxNum = Math.max(maxNum, parseInt(m[1],10));
     });
     txnWithoutNo.no = "TRX-" + String(maxNum+1).padStart(4,"0");
-    tx.set(txnRef, { value: [txnWithoutNo, ...currentServer], updatedAt: Date.now() });
+    const result = [txnWithoutNo, ...currentServer];
+    tx.set(txnRef, { value: result, updatedAt: Date.now() });
+    return result;
   });
+  syncBaseline["basecamp_transactions"] = JSON.parse(JSON.stringify(finalArr));
   // update tampilan lokal juga (listener onSnapshot akan menyusul & menyamakan lagi sesaat kemudian)
   if(!transactions.some(t=>t.id===txnWithoutNo.id)) transactions.unshift(txnWithoutNo);
   try{ localStorage.setItem("basecamp_transactions", JSON.stringify(transactions)); }catch(e){}
@@ -2466,7 +2537,7 @@ saveBtn.addEventListener("click", async ()=>{
     const t = transactions.find(x=>x.id===draft.editingId);
     if(t){
       const editedName = (draft.editCustName||"").trim();
-      const editedPhone = (draft.editCustPhone||"").trim().replace(/[^0-9]/g,"");
+      const editedPhone = normalizePhone(draft.editCustPhone);
       t.customer = { ...t.customer, name: editedName || t.customer.name, phone: editedPhone || t.customer.phone };
       syncCustomerInCustomersList(t.customer);
 
@@ -2517,7 +2588,7 @@ saveBtn.addEventListener("click", async ()=>{
     const b = bookings.find(x=>x.id===draft.editingId);
     if(b){
       const editedName = (draft.editCustName||"").trim();
-      const editedPhone = (draft.editCustPhone||"").trim().replace(/[^0-9]/g,"");
+      const editedPhone = normalizePhone(draft.editCustPhone);
       b.customer = { ...b.customer, name: editedName || b.customer.name, phone: editedPhone || b.customer.phone };
       syncCustomerInCustomersList(b.customer);
 
@@ -2542,7 +2613,7 @@ saveBtn.addEventListener("click", async ()=>{
   if(draft.editingType==="activate"){
     const b = bookings.find(x=>x.id===draft.editingId);
     const editedName = (draft.editCustName||"").trim();
-    const editedPhone = (draft.editCustPhone||"").trim().replace(/[^0-9]/g,"");
+    const editedPhone = normalizePhone(draft.editCustPhone);
     const base = b ? b.customer : { id: uid(), name:"", phone:"" };
     const customer = { ...base, name: editedName || base.name, phone: editedPhone || base.phone };
     if(customers.some(c=>c.id===customer.id)) syncCustomerInCustomersList(customer);
@@ -2573,7 +2644,6 @@ saveBtn.addEventListener("click", async ()=>{
       total: grandTotal,
       status: "aktif",
       dendaList: [],
-      jaminanReturned: false,
       fromBookingId: b ? b.id : null,
       createdAt: new Date().toISOString()
     };
@@ -2597,7 +2667,7 @@ saveBtn.addEventListener("click", async ()=>{
   if(draft.mode==="booking"){
     let customer = draft.selectedCustomer;
     if(!customer){
-      customer = { id: uid(), name: draft.newName.trim(), phone: draft.newPhone.trim().replace(/[^0-9]/g,"") };
+      customer = { id: uid(), name: draft.newName.trim(), phone: normalizePhone(draft.newPhone) };
       customers.push(customer);
       save("basecamp_customers", customers);
     } else {
@@ -2630,7 +2700,7 @@ saveBtn.addEventListener("click", async ()=>{
   // ---- NEW SALE: create a new transaction directly ----
   let customer = draft.selectedCustomer;
   if(!customer){
-    customer = { id: uid(), name: draft.newName.trim(), phone: draft.newPhone.trim().replace(/[^0-9]/g,"") };
+    customer = { id: uid(), name: draft.newName.trim(), phone: normalizePhone(draft.newPhone) };
     customers.push(customer);
     save("basecamp_customers", customers);
   } else {
@@ -2654,7 +2724,6 @@ saveBtn.addEventListener("click", async ()=>{
     total: grandTotal,
     status: "aktif",
     dendaList: [],
-    jaminanReturned: false,
     createdAt: new Date().toISOString()
   };
   // Sama seperti aktivasi booking: status/paidAmount final selalu ditentukan dari paymentHistory,
@@ -2679,7 +2748,7 @@ function renderTransaksi(){
 
   if(txnFilter==="Aktif") list = list.filter(t=>t.status==="aktif");
   if(txnFilter==="Selesai") list = list.filter(t=>t.status==="selesai");
-  if(txnFilter==="Jaminan Ditahan") list = list.filter(t=>t.jaminan && t.jaminan.type!=='none' && !t.jaminanReturned);
+  if(txnFilter==="Jaminan Ditahan") list = list.filter(t=>isJaminanHeld(t));
   if(txnFilter==="Hampir Selesai") list = list.filter(isSoon);
   if(txnFilter==="Terlambat") list = list.filter(isLate);
 
@@ -2824,7 +2893,7 @@ function renderTxnDetailPanel(){
   const sisa = t.total - (t.payment.paidAmount||0);
   const dendaList = t.dendaList || [];
   const dendaUnpaidTotal = dendaList.filter(d=>!d.paid).reduce((s,d)=>s+d.amount,0);
-  const jaminanHeld = t.jaminan && t.jaminan.type!=='none' && !t.jaminanReturned;
+  const jaminanHeld = isJaminanHeld(t);
   const payLabels = { hutang:"Belum Bayar", sebagian:"Sebagian", lunas:"Lunas" };
   const paymentHistory = t.paymentHistory || [];
 
@@ -2883,7 +2952,6 @@ function renderTxnDetailPanel(){
       ${t.status==='aktif' ? `<button class="finish-txn-btn td-ok" data-id="${t.id}">✅ Selesaikan Transaksi</button>` : ""}
       ${t.payment.status!=='lunas' ? `<button class="add-bayar-btn" data-id="${t.id}">+ Bayar</button>` : ""}
       <button class="add-denda-btn" data-id="${t.id}">+ Denda</button>
-      ${t.jaminan && t.jaminan.type!=='none' ? `<button class="toggle-jaminan-btn" data-id="${t.id}">${jaminanHeld ? '✅ Kembalikan Jaminan' : '↩ Tandai Ditahan Lagi'}</button>` : ""}
       <button class="wa-btn td-ok" data-id="${t.id}">📨 Kirim WA</button>
       <button class="receipt-btn" data-id="${t.id}" data-mode="struk">🧾 Struk Gambar</button>
       <button class="receipt-btn" data-id="${t.id}" data-mode="invoice">📄 Invoice Gambar</button>
@@ -2920,7 +2988,8 @@ function renderTxnDetailPanel(){
 
     ${t.jaminan && t.jaminan.type!=='none' ? `
     <div class="section-label" style="margin-top:20px;">Jaminan</div>
-    <div class="detail-row"><div class="dl">${jaminanLabel(t.jaminan)}</div><div class="dv">${jaminanHeld ? 'Ditahan' : 'Sudah kembali'}</div></div>
+    <div class="detail-row"><div class="dl">${jaminanLabel(t.jaminan)}</div><div class="dv">${jaminanHeld ? 'Ditahan' : '✅ Sudah kembali'}</div></div>
+    ${jaminanHeld ? `<div class="date-summary" style="margin-top:-4px;">${txnReturnState(t)!=='full' ? 'Masih ditahan — ada barang yang belum dikembalikan.' : 'Masih ditahan — masih ada denda yang belum lunas.'} Otomatis kembali begitu semuanya beres.</div>` : ""}
     ` : ""}
 
     <div style="margin-top:20px;">${actionsHtml}</div>
@@ -2999,29 +3068,10 @@ function renderTxnDetailPanel(){
       });
     });
   });
-  q(".toggle-jaminan-btn").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      const tx = transactions.find(x=>x.id===btn.dataset.id);
-      if(!tx) return;
-      const held = !tx.jaminanReturned;
-      const unpaid = (tx.dendaList||[]).filter(d=>!d.paid).reduce((s,d)=>s+d.amount,0);
-      if(held && unpaid>0){
-        showConfirm(`Masih ada denda ${fmt(unpaid)} yang belum lunas. Tetap kembalikan jaminan?`, ()=>{
-          tx.jaminanReturned = true;
-          save("basecamp_transactions", transactions);
-          renderTxnDetailPanel(); renderTransaksi();
-        });
-      } else {
-        tx.jaminanReturned = !tx.jaminanReturned;
-        save("basecamp_transactions", transactions);
-        renderTxnDetailPanel(); renderTransaksi();
-      }
-    });
-  });
   q(".wa-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const tx = transactions.find(x=>x.id===btn.dataset.id);
-      window.open(`https://wa.me/${tx.customer.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(buildReceiptMessage(tx))}`, "_blank");
+      window.open(`https://wa.me/${normalizePhone(tx.customer.phone)}?text=${encodeURIComponent(buildReceiptMessage(tx))}`, "_blank");
     });
   });
   q(".receipt-btn").forEach(btn=>{
@@ -3496,6 +3546,15 @@ function jaminanLabel(j){
   const base = j.type==="ktp" ? "KTP" : j.type==="sim" ? "SIM" : "Kartu Lain";
   return j.note ? `${base} (${j.note})` : base;
 }
+// Status jaminan sepenuhnya OTOMATIS (tidak ada tombol manual lagi) — jaminan cuma dianggap
+// "ditahan" kalau masih ada barang yang belum dikembalikan, ATAU ada denda yang belum lunas.
+// Begitu semua barang kembali & semua denda lunas, jaminan otomatis dianggap sudah dikembalikan.
+function isJaminanHeld(t){
+  if(!t.jaminan || t.jaminan.type==="none") return false;
+  const allReturned = txnReturnState(t)==="full";
+  const hasUnpaidDenda = (t.dendaList||[]).some(d=>!d.paid);
+  return !allReturned || hasUnpaidDenda;
+}
 function methodLabel(m){ return m==="qris" ? "QRIS" : m==="transfer" ? "Transfer" : m==="belum_bayar" ? "Belum Bayar" : "Cash"; }
 // Ringkasan metode bayar untuk ditampilkan di struk/laporan — kalau transaksi dibayar pakai
 // SPLIT beberapa metode (lihat paymentHistory), tampilkan rinciannya semua, bukan cuma 1 metode
@@ -3671,7 +3730,7 @@ document.getElementById("receiptShareBtn").addEventListener("click", async ()=>{
       link.href = URL.createObjectURL(blob);
       link.click();
       if(t && t.customer.phone){
-        window.open(`https://wa.me/${t.customer.phone.replace(/[^0-9]/g,"")}`, "_blank");
+        window.open(`https://wa.me/${normalizePhone(t.customer.phone)}`, "_blank");
       }
     }
   }, "image/png");
@@ -3772,7 +3831,7 @@ function renderBooking(){
   bookingEl.querySelectorAll(".wa-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const b = bookings.find(x=>x.id===btn.dataset.id);
-      window.open(`https://wa.me/${b.customer.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(buildBookingMessage(b))}`, "_blank");
+      window.open(`https://wa.me/${normalizePhone(b.customer.phone)}?text=${encodeURIComponent(buildBookingMessage(b))}`, "_blank");
     });
   });
 }
@@ -3922,9 +3981,8 @@ function parseBulkContacts(text){
     if(parts.length===0) continue;
     const phoneIdx = parts.findIndex(p => (p.match(/\d/g)||[]).length >= 5);
     if(phoneIdx===-1) continue;
-    let phone = parts[phoneIdx].replace(/[^0-9]/g,"");
+    let phone = normalizePhone(parts[phoneIdx]);
     if(!phone) continue;
-    if(phone.startsWith("0")) phone = "62"+phone.slice(1);
     let name = parts.filter((p,i)=>i!==phoneIdx).join(" ").trim();
     if(!name) name = "Tanpa Nama";
     results.push({ name, phone });
@@ -4533,7 +4591,7 @@ function renderPiutang(){
 
   document.querySelectorAll("#piutangWrap .wa-tagih-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
-      window.open(`https://wa.me/${btn.dataset.phone.replace(/[^0-9]/g,"")}?text=${btn.dataset.msg}`, "_blank");
+      window.open(`https://wa.me/${normalizePhone(btn.dataset.phone)}?text=${btn.dataset.msg}`, "_blank");
     });
   });
 }
@@ -4838,7 +4896,7 @@ function renderHome(){
       e.stopPropagation();
       const t = transactions.find(x=>x.id===btn.dataset.remindBtn);
       if(!t) return;
-      window.open(`https://wa.me/${t.customer.phone.replace(/[^0-9]/g,"")}?text=${encodeURIComponent(buildReturnReminderMessage(t))}`, "_blank");
+      window.open(`https://wa.me/${normalizePhone(t.customer.phone)}?text=${encodeURIComponent(buildReturnReminderMessage(t))}`, "_blank");
     });
   });
   const restoreBtn = document.getElementById("restoreDataBtn");
@@ -5027,6 +5085,10 @@ if(firebaseEnabled){
       if(!snap.exists) return; // belum pernah ada data tersimpan online untuk key ini, biarkan data lokal yang jalan
       const val = snap.data().value;
       applyValue(val);
+      // "syncBaseline" dipakai saveArraySafely() buat tahu versi mana yang terakhir kali beneran
+      // sama dengan server — di-update setiap kali ada versi server terkonfirmasi masuk (baik dari
+      // device lain, maupun konfirmasi tulisan kita sendiri).
+      if(SAFE_ARRAY_SYNC_KEYS.includes(key) && Array.isArray(val)) syncBaseline[key] = JSON.parse(JSON.stringify(val));
       try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){}
       rerenderCurrentTab();
     }, err=>console.error("Gagal menerima update online untuk", key, err));
