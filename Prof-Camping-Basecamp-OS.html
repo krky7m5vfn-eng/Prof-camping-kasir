@@ -45,6 +45,14 @@
   }
 
   header{position:sticky; top:0; z-index:20; background:linear-gradient(180deg, var(--pine) 70%, rgba(21,28,24,0.94)); border-bottom:1px solid var(--line); padding:18px 20px 0;}
+  /* Bar pencarian + filter kategori (di halaman Katalog): ikut sembunyi kalau discroll ke bawah
+     (supaya layar penuh dipakai lihat produk), balik muncul begitu discroll ke atas sedikit saja —
+     pola "hide on scroll down, show on scroll up" ala Twitter/Instagram. Dianimasikan pakai trik
+     grid-template-rows 1fr→0fr (auto-height collapse) supaya tidak perlu nebak max-height manual.
+     Lihat listener scroll "katalogFilters hide/show" di JS untuk logikanya. */
+  #katalogFilters{display:grid; grid-template-rows:1fr; transition:grid-template-rows .28s cubic-bezier(.4,0,.2,1);}
+  #katalogFilters.kf-hidden{grid-template-rows:0fr;}
+  #katalogFilters .kf-inner{overflow:hidden; min-height:0;}
   .brand{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;}
   .brand h1{font-size:clamp(26px,5vw,36px); font-weight:800; margin:0; color:var(--canvas); line-height:0.9;}
   .brand .tagline{font-size:11px; color:var(--amber-bright); font-family:'IBM Plex Mono',monospace; letter-spacing:0.08em; margin-top:4px;}
@@ -621,14 +629,16 @@
     </div>
   </div>
   <div id="katalogFilters" style="display:none">
-    <div class="searchbar"><input id="searchInput" type="text" inputmode="search" placeholder="Cari alat… misal: tenda, kompor, lampu"></div>
-    <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-      <button id="addProductBtn" class="add-product-btn">+ Tambah Produk</button>
-    </div>
-    <div class="chips" id="chips"></div>
-    <div class="cols-control">
-      <span class="cc-label">PRODUK/BARIS</span>
-      <div class="cols-options" id="colsOptions"></div>
+    <div class="kf-inner">
+      <div class="searchbar"><input id="searchInput" type="text" inputmode="search" placeholder="Cari alat… misal: tenda, kompor, lampu"></div>
+      <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+        <button id="addProductBtn" class="add-product-btn">+ Tambah Produk</button>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="cols-control">
+        <span class="cc-label">PRODUK/BARIS</span>
+        <div class="cols-options" id="colsOptions"></div>
+      </div>
     </div>
   </div>
 </header>
@@ -1548,6 +1558,12 @@ function goToTab(tabName, opts={}){
   // dipakai CSS (lihat media query min-width:900px) supaya panel keranjang di halaman POS Kilat
   // tahu kapan harus tampil sebagai panel tetap di sisi kanan (khusus tab katalog, layar lebar).
   document.body.dataset.view = tabName;
+  if(tabName==="katalog"){
+    // Balik ke tab Katalog selalu mulai dalam keadaan filter TAMPIL (bukan nyangkut tersembunyi
+    // dari posisi scroll sesi sebelumnya).
+    const kf = document.getElementById("katalogFilters");
+    if(kf) kf.classList.remove("kf-hidden");
+  }
   document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("active", b.dataset.tab===tabName));
   document.getElementById("katalogFilters").style.display = activeTab==="katalog" ? "" : "none";
   document.getElementById("homeView").style.display = activeTab==="home" ? "" : "none";
@@ -4945,6 +4961,39 @@ function renderDashboard(){
 
 // ================= SEARCH =================
 document.getElementById("searchInput").addEventListener("input", (e)=>{ query = e.target.value; renderCatalog(); });
+
+// ================= HIDE/SHOW KATALOG FILTERS ON SCROLL =================
+// "Hide on scroll down, show on scroll up" ala Twitter/Instagram, khusus di halaman Katalog —
+// begitu discroll ke bawah beberapa piksel, bar pencarian+filter kategori ikut sembunyi (supaya
+// layar penuh dipakai lihat produk); scroll ke atas dikit aja langsung muncul lagi. Dekat posisi
+// paling atas selalu dipaksa muncul supaya tidak nyangkut dalam keadaan tersembunyi.
+(function(){
+  const katalogFiltersEl = document.getElementById("katalogFilters");
+  // "anchorY" = posisi scroll terakhir kali status tampil/sembunyi berubah. Dibandingkan ke titik
+  // ini (bukan ke event scroll sebelumnya) supaya tahan terhadap goyangan kecil (mis. momentum/bounce
+  // scroll di trackpad atau touch) — baru berubah kalau geserannya beneran cukup jauh dari titik acuan.
+  let anchorY = window.scrollY;
+  let ticking = false;
+  window.addEventListener("scroll", ()=>{
+    if(activeTab !== "katalog") return;
+    if(ticking) return;
+    ticking = true;
+    requestAnimationFrame(()=>{
+      const y = window.scrollY;
+      if(y < 40){
+        katalogFiltersEl.classList.remove("kf-hidden");
+        anchorY = y;
+      } else if(y - anchorY > 24){
+        katalogFiltersEl.classList.add("kf-hidden");
+        anchorY = y;
+      } else if(anchorY - y > 8){
+        katalogFiltersEl.classList.remove("kf-hidden");
+        anchorY = y;
+      }
+      ticking = false;
+    });
+  }, { passive:true });
+})();
 
 // ================= INIT =================
 renderChips();
