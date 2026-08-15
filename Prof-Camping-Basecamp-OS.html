@@ -904,7 +904,23 @@
   </div>
 </div>
 
+<div id="miniToast" style="position:fixed; left:50%; bottom:90px; transform:translateX(-50%) translateY(20px); z-index:999; background:var(--pine,#1B1512); color:#fff; font-family:'IBM Plex Mono'; font-size:12.5px; padding:11px 16px; border-radius:10px; max-width:86vw; text-align:center; line-height:1.5; box-shadow:0 6px 20px rgba(0,0,0,.3); opacity:0; pointer-events:none; transition:opacity .25s, transform .25s;"></div>
+
 <script>
+// ================= MINI TOAST (notifikasi kecil non-blocking) =================
+let miniToastTimer = null;
+function showToast(message, duration=3200){
+  const el = document.getElementById("miniToast");
+  el.textContent = message;
+  el.style.opacity = "1";
+  el.style.transform = "translateX(-50%) translateY(0)";
+  clearTimeout(miniToastTimer);
+  miniToastTimer = setTimeout(()=>{
+    el.style.opacity = "0";
+    el.style.transform = "translateX(-50%) translateY(20px)";
+  }, duration);
+}
+
 // ================= MODAL KONFIRMASI KUSTOM =================
 // Pengganti window.confirm(), karena confirm() bawaan browser tidak muncul saat
 // aplikasi dijalankan sebagai web app dari Home Screen di iPad/iPhone (mode standalone).
@@ -1229,6 +1245,10 @@ function load(key, fallback){ try{ const v = localStorage.getItem(key); return v
 // pakai saveArraySafely() (baca dulu versi server TERBARU, gabung perubahan kita ke situ, baru
 // simpan) supaya tidak ada perubahan device lain yang ketiban.
 const SAFE_ARRAY_SYNC_KEYS = ["basecamp_transactions","basecamp_deleted_transactions","basecamp_bookings","basecamp_customers"];
+// Link invite grup WhatsApp karyawan — dipakai saat kirim struk teks supaya bisa langsung
+// dibuka juga tab grupnya (isi pesan otomatis ke-copy ke clipboard, tinggal paste manual
+// karena WhatsApp tidak izinkan pre-fill teks untuk grup lewat URL).
+const WA_GROUP_LINK = load("basecamp_wa_group_link", "https://chat.whatsapp.com/E6vX4lVRyCz8Pa3qDFeBc0?s=cl&p=i&ilr=2");
 // Salinan independen (deep clone) dari versi TERAKHIR yang kita tahu sama persis dengan server,
 // per key — dipakai buat menghitung apa saja yang BENERAN kita ubah (bukan menganggap seluruh
 // array lokal itu "kebenaran mutlak").
@@ -1576,6 +1596,10 @@ let draft = freshDraft();
 let editPrevCart = null, editPrevDraft = null; // backup so editing can be cancelled without losing an in-progress new sale
 
 let activeCat = "Semua", query = "", activeTab = "home", txnFilter = "Semua", bookingFilter = "Semua";
+// Filter tanggal di tab Booking — dipakai untuk lihat booking yang nyangkut di tanggal
+// tertentu (buat cek stok alat apa saja yang kepakai hari itu). Default hari ini; kosongkan
+// (null) untuk lihat semua tanggal lagi.
+let bookingDateFilter = todayISO();
 let catalogCols = load("basecamp_catalog_cols", "auto"); // "auto" atau angka 2-8 (jumlah produk per baris, dipilih pengguna)
 let txnQuery = "", txnDateMode = "semua", txnDateStart = todayISO(), txnDateEnd = todayISO(); // pencarian & filter periode transaksi
 let txnMethodFilter = "semua"; // filter metode bayar (semua/cash/qris/transfer) di tab Transaksi
@@ -3071,7 +3095,18 @@ function renderTxnDetailPanel(){
   q(".wa-btn").forEach(btn=>{
     btn.addEventListener("click", ()=>{
       const tx = transactions.find(x=>x.id===btn.dataset.id);
-      window.open(`https://wa.me/${normalizePhone(tx.customer.phone)}?text=${encodeURIComponent(buildReceiptMessage(tx))}`, "_blank");
+      const msg = buildReceiptMessage(tx);
+      // Kirim ke pelanggan: teks langsung terisi otomatis.
+      window.open(`https://wa.me/${normalizePhone(tx.customer.phone)}?text=${encodeURIComponent(msg)}`, "_blank");
+      // Kirim ke grup karyawan: WhatsApp tidak izinkan pre-fill teks untuk grup lewat URL,
+      // jadi teks di-copy ke clipboard dulu (tinggal paste), lalu tab grup dibuka menyusul.
+      if(WA_GROUP_LINK){
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          navigator.clipboard.writeText(msg).catch(()=>{});
+        }
+        setTimeout(()=>{ window.open(WA_GROUP_LINK, "_blank"); }, 400);
+        showToast("Struk pelanggan terkirim. Teks struk sudah disalin — tinggal paste di grup karyawan yang baru terbuka.");
+      }
     });
   });
   q(".receipt-btn").forEach(btn=>{
@@ -3746,14 +3781,40 @@ function renderBooking(){
   if(bookingFilter==="Diaktifkan") list = bookings.filter(b=>b.status==="diaktifkan");
   if(bookingFilter==="Dibatalkan") list = bookings.filter(b=>b.status==="batal");
 
+  // Filter tanggal: booking yang rentang sewanya (startDate..endDate) menyentuh tanggal terpilih.
+  // Booking yang sudah dibatalkan tidak dihitung ke rekap stok (tidak jadi dipakai).
+  if(bookingDateFilter){
+    list = list.filter(b => b.startDate <= bookingDateFilter && b.endDate >= bookingDateFilter);
+  }
+
   let html = `
     <div style="margin-bottom:14px">
       <button id="newBookingBtn" class="save-btn" style="padding:12px;">+ Booking Baru (Pilih Alat di Katalog)</button>
     </div>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
+      <input class="field" type="date" id="bookingDateInput" value="${bookingDateFilter||''}" style="max-width:170px;">
+      <button id="bookingDateTodayBtn" class="edit-btn" style="padding:8px 12px;">Hari Ini</button>
+      ${bookingDateFilter ? `<button id="bookingDateClearBtn" class="edit-btn" style="padding:8px 12px;">Semua Tanggal</button>` : ''}
+    </div>
     <div style="margin-top:0">${selectHtml("bookingFilterSelect", filters.map(f=>[f,f]), bookingFilter)}</div>`;
 
+  if(bookingDateFilter){
+    const itemTotals = {};
+    list.filter(b=>b.status!=="batal").forEach(b=>{
+      (b.items||[]).forEach(i=>{ itemTotals[i.name] = (itemTotals[i.name]||0) + i.qty; });
+    });
+    const itemNames = Object.keys(itemTotals).sort();
+    html += `
+    <div class="txn-card" style="margin-bottom:12px; border-color:var(--amber-bright, #C2622A);">
+      <div class="cn" style="margin-bottom:8px;">📦 Ringkasan Item — ${fmtDateFull(bookingDateFilter)}</div>
+      ${itemNames.length===0
+        ? `<div class="txn-items">Tidak ada alat yang dibooking di tanggal ini.</div>`
+        : itemNames.map(name=>`<div class="txn-items" style="display:flex; justify-content:space-between;"><span>${name}</span><span><b>${itemTotals[name]}</b> unit</span></div>`).join("")}
+    </div>`;
+  }
+
   if(list.length===0){
-    html += `<div class="empty">Belum ada booking${bookingFilter!=='Semua' ? ' dengan status ini' : ''}.</div>`;
+    html += `<div class="empty">Belum ada booking${bookingFilter!=='Semua' ? ' dengan status ini' : ''}${bookingDateFilter ? ' di tanggal ini' : ''}.</div>`;
   } else {
     html += list.map(b=>{
       const itemsStr = b.items.map(i=>`${i.name} ×${i.qty}`).join(", ");
@@ -3795,6 +3856,12 @@ function renderBooking(){
 
   const bookingFilterSelect = document.getElementById("bookingFilterSelect");
   if(bookingFilterSelect) bookingFilterSelect.addEventListener("change", e=>{ bookingFilter = e.target.value; renderBooking(); });
+  const bookingDateInput = document.getElementById("bookingDateInput");
+  if(bookingDateInput) bookingDateInput.addEventListener("change", e=>{ bookingDateFilter = e.target.value || null; renderBooking(); });
+  const bookingDateTodayBtn = document.getElementById("bookingDateTodayBtn");
+  if(bookingDateTodayBtn) bookingDateTodayBtn.addEventListener("click", ()=>{ bookingDateFilter = todayISO(); renderBooking(); });
+  const bookingDateClearBtn = document.getElementById("bookingDateClearBtn");
+  if(bookingDateClearBtn) bookingDateClearBtn.addEventListener("click", ()=>{ bookingDateFilter = null; renderBooking(); });
   bookingEl.querySelectorAll(".edit-btn:not(.restore-booking-btn)").forEach(btn=>{
     btn.addEventListener("click", ()=>{ openEditBooking(btn.dataset.id); });
   });
