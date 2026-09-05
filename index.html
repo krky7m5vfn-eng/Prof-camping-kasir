@@ -989,7 +989,8 @@ const FIRESTORE_SYNCED_KEYS = [
   "basecamp_custom_products",
   "basecamp_product_overrides",
   "basecamp_product_stock",
-  "basecamp_kas_harian"
+  "basecamp_kas_harian",
+  "basecamp_ai_aliases"
 ];
 
 // ================= BACKUP / EXPORT DATA MANUAL =================
@@ -1025,6 +1026,7 @@ function restoreBackup(backupData){
   }
   if(backupData.basecamp_product_stock) productStock = backupData.basecamp_product_stock;
   if(backupData.basecamp_kas_harian) kasHarian = backupData.basecamp_kas_harian;
+  if(backupData.basecamp_ai_aliases) aiAliasMap = backupData.basecamp_ai_aliases;
 
   FIRESTORE_SYNCED_KEYS.forEach(key=>{
     if(backupData[key]!==undefined) save(key, backupData[key]);
@@ -1041,6 +1043,13 @@ const GOOGLE_SHEETS_URL = "https://script.google.com/macros/s/AKfycbxygMPcwZryH_
 // Apps Script (lihat catatan setup dari Claude untuk kode doPost()-nya).
 const GOOGLE_SHEETS_SECRET = "GANTI_DENGAN_KATA_SANDI_RAHASIA";
 const googleSheetsEnabled = GOOGLE_SHEETS_URL && !GOOGLE_SHEETS_URL.startsWith("GANTI_");
+
+// ================= INPUT STRUK OTOMATIS PAKAI AI (baca teks WhatsApp berantakan) =================
+// Isi dengan URL Cloud Function "parseStruk" hasil deploy (lihat panduan setup terpisah dari Claude).
+// Selama masih "GANTI_...", tombol "Baca & Isi Otomatis" di tab Input Cepat otomatis nonaktif dan
+// tidak memengaruhi aplikasi sama sekali — fitur lain tetap jalan seperti biasa.
+const AI_PARSE_ENDPOINT_URL = "GANTI_DENGAN_URL_CLOUD_FUNCTION_PARSE_STRUK";
+const aiParseEnabled = AI_PARSE_ENDPOINT_URL && !AI_PARSE_ENDPOINT_URL.startsWith("GANTI_");
 
 function syncTransactionsToSheet(list){
   if(!googleSheetsEnabled) return;
@@ -1557,6 +1566,12 @@ const DEFAULT_PRODUCT_IMAGES = {
 let productImages = Object.assign({}, DEFAULT_PRODUCT_IMAGES, load("basecamp_product_images", {})); // id -> foto produk (base64 dataURL, sudah dikompres kecil). Disimpan sebagai dokumen Firestore TERPISAH per produk (bukan digabung 1 dokumen) supaya tidak kena limit ukuran 1MB per dokumen.
 let cart = load("basecamp_cart_v2", {});               // id -> qty
 
+// "Kamus koreksi" untuk fitur Baca Struk AI: teks mentah (huruf kecil semua) -> id produk yang benar,
+// dibangun otomatis tiap kali admin mengoreksi/memilihkan produk secara manual saat mengecek hasil
+// bacaan AI. Dikirim balik ke AI di pemanggilan berikutnya sebagai petunjuk, supaya makin lama makin
+// nyambung dengan gaya tulisan admin di WhatsApp (bukan AI "belajar" beneran, tapi efeknya mirip).
+let aiAliasMap = load("basecamp_ai_aliases", {});
+
 // apply any saved edits to the built-in catalog items (built-in items are const but their fields aren't frozen)
 CATALOG.forEach(p=>{ if(productOverrides[p.id]) Object.assign(p, productOverrides[p.id]); });
 
@@ -1625,6 +1640,10 @@ function methodAmountForTxn(t, method){
 }
 let txnDetailId = null; // id transaksi yang lagi dibuka di layar Detail Transaksi (null = tampil daftar)
 let quickSelectedCustomer = null; // pelanggan yang dipilih lewat autocomplete di tab Input Cepat
+// state khusus panel "Baca Struk AI" di tab Input Cepat
+let aiLoading = false, aiError = null, aiReview = null; // aiReview: {customerName,customerPhone,startDate,durationDays,items:[{rawText,productId,qty}]}
+let aiInputText = ""; // teks yang sedang diketik/ditempel di kotak "Baca Struk AI", disimpan supaya tidak hilang saat render ulang (mis. saat status "Memproses…")
+let quickTypedName = "", quickAiPhone = ""; // dipakai membawa nama/HP hasil bacaan AI ke form pelanggan baru
 
 // ---- laporan (report) state ----
 let lapPeriodType = "harian"; // 'harian' | 'bulanan' | 'tahunan' | 'custom'
@@ -4120,15 +4139,145 @@ confirmImportBtn.addEventListener("click", ()=>{
 // ================= INPUT CEPAT (autocomplete, ramah HP layar kecil) =================
 const quickInputEl = document.getElementById("quickInputView");
 
+// ================= BACA STRUK AI (parse teks WhatsApp berantakan jadi data transaksi) =================
+async function runAiParse(){
+  const textEl = document.getElementById("qiAiText");
+  const text = textEl ? textEl.value.trim() : aiInputText.trim();
+  aiInputText = text;
+  if(!text) return;
+  if(!aiParseEnabled){
+    aiError = "Fitur ini belum aktif — Cloud Function-nya belum di-setup/dihubungkan. Minta bantuan setup dulu.";
+    renderQuickInput();
+    return;
+  }
+  aiLoading = true; aiError = null; aiReview = null;
+  renderQuickInput();
+  try{
+    const res = await fetch(AI_PARSE_ENDPOINT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        catalogNames: allProducts().map(p=>p.name),
+        aliases: aiAliasMap
+      })
+    });
+    if(!res.ok) throw new Error("server merespon status " + res.status);
+    const data = await res.json();
+    aiReview = {
+      customerName: data.customerName || "",
+      customerPhone: data.customerPhone || "",
+      startDate: data.startDate || todayISO(),
+      durationDays: Math.max(1, parseInt(data.durationDays)||1),
+      items: (Array.isArray(data.items)?data.items:[]).map(it=>{
+        const rawKey = (it.rawText||"").trim().toLowerCase();
+        let productId = null;
+        const aliasId = rawKey ? aiAliasMap[rawKey] : null;
+        if(aliasId && allProducts().find(p=>p.id===aliasId)){
+          productId = aliasId; // kamus koreksi lebih diprioritaskan dibanding tebakan AI kali ini
+        } else if(it.matchedName){
+          const p = allProducts().find(p=>p.name===it.matchedName);
+          if(p) productId = p.id;
+        }
+        return { rawText: it.rawText || "", productId, qty: Math.max(1, parseInt(it.qty)||1) };
+      })
+    };
+  }catch(err){
+    console.error("Gagal memproses AI:", err);
+    aiError = "Gagal memproses teks ini. Cek koneksi internet, atau coba lagi sebentar lagi.";
+  }
+  aiLoading = false;
+  renderQuickInput();
+}
+
+function applyAiReview(){
+  if(!aiReview) return;
+  aiReview.items.forEach((it,i)=>{
+    const selEl = document.getElementById("aiSel"+i);
+    const qtyEl = document.getElementById("aiQty"+i);
+    if(!selEl) return;
+    const pid = selEl.value;
+    if(!pid) return; // dilewati: masih "tidak dikenali" dan belum dipilih manual
+    const qty = Math.max(1, parseInt(qtyEl ? qtyEl.value : it.qty)||1);
+    cart[pid] = (cart[pid]||0) + qty;
+    // pelajari koreksi ke kamus: kalau hasil akhir beda dari yang tadinya ke-set, simpan supaya lain kali lebih akurat
+    const key = (it.rawText||"").trim().toLowerCase();
+    if(key && aiAliasMap[key] !== pid){
+      aiAliasMap[key] = pid;
+      save("basecamp_ai_aliases", aiAliasMap);
+    }
+  });
+  save("basecamp_cart_v2", cart);
+
+  const custName = (document.getElementById("qiAiCustName")?.value || "").trim();
+  const custPhone = (document.getElementById("qiAiCustPhone")?.value || "").trim();
+  const startDateEl = document.getElementById("qiAiStartDate");
+  draft.startDate = (startDateEl && startDateEl.value) ? startDateEl.value : todayISO();
+  draft.durationDays = aiReview.durationDays || draft.durationDays;
+
+  if(custPhone){
+    const norm = normalizePhone(custPhone);
+    const match = customers.find(c=>normalizePhone(c.phone)===norm);
+    if(match){ quickSelectedCustomer = match; quickAiPhone = ""; }
+    else { quickSelectedCustomer = null; quickAiPhone = custPhone; }
+  } else {
+    quickAiPhone = "";
+  }
+  quickTypedName = custName;
+
+  aiReview = null;
+  aiInputText = ""; // sudah dipakai & diterapkan, kosongkan kotaknya lagi
+  renderQuickInput(); renderCartFab();
+}
+
+function aiReviewHtml(){
+  if(!aiReview) return "";
+  const prodOptions = allProducts().slice().sort((a,b)=>a.name.localeCompare(b.name,"id",{sensitivity:"base"}));
+  const rows = aiReview.items.map((it,i)=>{
+    const optsHtml = `<option value="">— tidak dikenali, pilih manual —</option>` +
+      prodOptions.map(p=>`<option value="${p.id}" ${it.productId===p.id?"selected":""}>${p.name} (${fmt(p.price)})</option>`).join("");
+    return `
+      <div class="add-item-row" style="flex-direction:column; align-items:stretch; gap:6px; padding:10px 4px;">
+        <div style="font-size:12px; color:var(--canvas-dim); font-style:italic;">"${it.rawText}"${it.productId?"":' <span style="color:var(--warn); font-style:normal;">· belum dikenali</span>'}</div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <select class="field select-field" id="aiSel${i}" style="flex:1; margin-bottom:0; font-size:13px;">${optsHtml}</select>
+          <input class="field mono" id="aiQty${i}" type="number" min="1" value="${it.qty}" style="width:56px; margin-bottom:0; padding:8px; text-align:center;">
+          <button class="ai-close-btn" style="width:auto; margin:0; padding:8px 10px;" data-airemove="${i}">✕</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  return `
+    <div class="add-item-picker" id="qiAiReviewBox" style="margin-top:10px;">
+      <div class="section-label" style="margin-top:0">Hasil Baca AI — cek dulu sebelum dipakai</div>
+      ${rows || '<div class="date-summary" style="margin-top:0">Tidak ada barang yang terbaca dari teks ini — coba tulis ulang atau tambah manual di bawah.</div>'}
+      <div class="section-label" style="margin-top:16px">Pelanggan &amp; Tanggal Mulai</div>
+      <input class="field" id="qiAiCustName" placeholder="Nama pelanggan" value="${aiReview.customerName}">
+      <input class="field" id="qiAiCustPhone" placeholder="No. WhatsApp (62…)" value="${aiReview.customerPhone}" inputmode="tel">
+      <input class="field" id="qiAiStartDate" type="date" value="${aiReview.startDate}">
+      <button class="save-btn" id="qiAiApplyBtn" style="margin-top:6px;">✓ Terapkan ke Keranjang</button>
+      <button class="ai-close-btn" id="qiAiCancelBtn">Batalkan</button>
+    </div>`;
+}
+
 function renderQuickInput(){
   const entries = cartEntries();
-  const custInputValue = quickSelectedCustomer ? quickSelectedCustomer.name : "";
+  const custInputValue = quickSelectedCustomer ? quickSelectedCustomer.name : quickTypedName;
 
   quickInputEl.innerHTML = `
     <div class="report-title" style="margin-top:6px">⚡ Input Cepat</div>
     <div class="date-summary">Ketik nama barang & pelanggan, tinggal pilih dari saran. Lebih cepat dibanding scroll katalog — cocok dipakai di HP layar kecil. Sewa langsung atau Booking DP bisa dipilih di langkah berikutnya.</div>
 
-    <div class="section-label">Cari & Tambah Barang</div>
+    <div class="section-label">🤖 Isi dari Struk WhatsApp</div>
+    <div class="add-item-picker">
+      <textarea class="field" id="qiAiText" rows="4" style="resize:vertical; margin-bottom:0;" placeholder="Tempel teks chat WA di sini, contoh: sewa tenda 4 orang 1, matras 2, an. Budi 081234567890, mulai besok">${aiInputText}</textarea>
+      <button class="add-item-toggle-btn" id="qiAiBtn" style="margin-top:8px" ${aiLoading?"disabled":""}>${aiLoading ? "Memproses…" : "✨ Baca & Isi Otomatis"}</button>
+      ${aiError ? `<div class="date-summary" style="color:var(--debt); margin-top:8px; margin-bottom:0;">${aiError}</div>` : ""}
+      ${!aiParseEnabled ? `<div class="date-summary" style="margin-top:8px; margin-bottom:0;">Fitur ini butuh setup Cloud Function sekali di awal — belum aktif.</div>` : ""}
+    </div>
+    ${aiReviewHtml()}
+
+    <div class="section-label" style="margin-top:20px">Cari & Tambah Barang</div>
     <div class="autocomplete-wrap">
       <input class="field" id="qiItemInput" placeholder="Ketik nama barang… misal: tenda" autocomplete="off">
       <div class="autocomplete-list" id="qiItemSuggestions"></div>
@@ -4154,6 +4303,23 @@ function renderQuickInput(){
 
     <button class="save-btn" id="qiContinueBtn" style="margin-top:18px" ${entries.length===0?"disabled":""}>Lanjut ke Detail & Simpan →</button>
   `;
+
+  // ---- Baca Struk AI ----
+  const qiAiText = document.getElementById("qiAiText");
+  if(qiAiText) qiAiText.addEventListener("input", ()=>{ aiInputText = qiAiText.value; });
+  const qiAiBtn = document.getElementById("qiAiBtn");
+  if(qiAiBtn) qiAiBtn.addEventListener("click", runAiParse);
+  const qiAiApplyBtn = document.getElementById("qiAiApplyBtn");
+  if(qiAiApplyBtn) qiAiApplyBtn.addEventListener("click", applyAiReview);
+  const qiAiCancelBtn = document.getElementById("qiAiCancelBtn");
+  if(qiAiCancelBtn) qiAiCancelBtn.addEventListener("click", ()=>{ aiReview = null; renderQuickInput(); });
+  document.querySelectorAll("[data-airemove]").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const i = parseInt(btn.dataset.airemove);
+      aiReview.items.splice(i,1);
+      renderQuickInput();
+    });
+  });
 
   // ---- autocomplete barang ----
   const qiItemInput = document.getElementById("qiItemInput");
@@ -4232,9 +4398,9 @@ function renderQuickInput(){
       draft.customerMode = "search";
     } else {
       const typedName = qiCustInput.value.trim();
-      if(typedName){ draft.customerMode = "new"; draft.newName = typedName; }
+      if(typedName){ draft.customerMode = "new"; draft.newName = typedName; draft.newPhone = quickAiPhone || draft.newPhone || ""; }
     }
-    quickSelectedCustomer = null; // sudah dipindahkan ke draft, reset state tab ini
+    quickSelectedCustomer = null; quickTypedName = ""; quickAiPhone = ""; // sudah dipindahkan ke draft, reset state tab ini
     openDrawer();
   });
 }
@@ -5181,6 +5347,7 @@ if(firebaseEnabled){
   });
   attachFirestoreSync("basecamp_product_stock", v=>{ productStock = v; });
   attachFirestoreSync("basecamp_kas_harian", v=>{ kasHarian = v; });
+  attachFirestoreSync("basecamp_ai_aliases", v=>{ aiAliasMap = v; });
 
   // Foto produk disimpan di koleksi TERPISAH (1 dokumen per produk), bukan digabung seperti data di atas,
   // supaya ukuran tiap dokumen tetap kecil dan tidak gampang kena limit 1MB Firestore.
